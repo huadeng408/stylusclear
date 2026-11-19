@@ -1,13 +1,13 @@
-# StylusClear v1.0.0 Static Analysis & Formal Security Report
+# StylusClear v1.1.0 Static Analysis & Formal Security Report
 
-* **Automated Gates Verified (`v1.0.0`)**:
+* **Automated Gates Verified (`v1.1.0`)**:
   * Rust: `cargo clippy --workspace --all-targets -- -D warnings` (`0` warnings), `cargo test --workspace` (`8/8` passed)
-  * WASM 1.0 MVP: `wasm-opt --mvp-features` (`0` float / `0` SIMD / `0` bulk-memory / `0` post-MVP opcodes; `65,673 B` raw / `24,501 B` Brotli-q11, `SHA-256: 174dda6effaf78c267c660deb396772e07d3869f710e7eebaa21d4d3e6a2cc91`)
-  * Solidity: `forge test` (`16/16` passed incl. `2x256` differential fuzz runs & `testV10_FactoryArbWasmRefundSubQuantumRepayAndGuards`), `SolidityClearingBenchmark` `24,254 B` runtime (`optimizer_runs = 200`), `StylusAtomicFactory` `2,046 B` runtime
+  * WASM 1.0 MVP: `wasm-opt --mvp-features` (`0` float / `0` SIMD / `0` bulk-memory / `0` post-MVP opcodes; `65,845 B` raw / `24,484 B` Brotli-q11, `SHA-256: eeb23f80174924ea880bebc7cd50bf35d04697be1e4ee3f6cc84d00e06b55277`)
+  * Solidity: `forge test` (`17/17` passed incl. `2x256` differential fuzz runs & `testV10_FactoryArbWasmRefundSubQuantumRepayAndGuards`), `SolidityClearingBenchmark` `24,484 B` runtime (`optimizer_runs = 200`), `StylusAtomicFactory` `2,064 B` runtime
   * Formal SMT & Fuzz: `tools/formal/prove_invariants_z3.py --require-cli --examples 100` (**6/6 Z3 theorems `PROVED_UNSAT`** + **100/100 EIP-712 Hypothesis differential cases** verified bit-for-bit against compiled Rust `clearing-cli`, `cli_replay_cross_checked: true`)
-  * Python & Shell & Frontend: `pytest -v` (`7/7`), `ruff check tools tests scripts` (`0` errors), `mypy tools` (`0` errors), `bash -n scripts/*.sh` (`0` errors), `node tests/test_seam_s3_workbench.mjs` (`37-method ABI`, real `0xcf36836c` calldata check)
+  * Python & Shell & Frontend: `pytest -v` (`8/8`), `ruff check tools tests scripts` (`0` errors), `mypy tools` (`0` errors), `bash -n scripts/*.sh` (`0` errors), `node tests/test_seam_s3_workbench.mjs` (`37-method ABI`, real `0xcf36836c` calldata check)
 
-## Triaged Solidity & Stylus Audit Notes (`v1.0.0`)
+## Triaged Solidity & Stylus Audit Notes (`v1.1.0`)
 
 | Finding / Check | Location | Status | Disposition |
 | :--- | :--- | :---: | :--- |

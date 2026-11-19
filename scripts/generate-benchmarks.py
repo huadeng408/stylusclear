@@ -184,7 +184,7 @@ def main() -> int:
         )
 
     out_data = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "calibration_status": "host_replay_analytical_and_foundry_measured",
         "methodology_disclosure": wasmi_data.get("calibration_note", ""),
         "wasm_binary": {
@@ -214,9 +214,9 @@ def main() -> int:
         ),
     }
 
-    ARTIFACTS_JSON.write_text(json.dumps(out_data, indent=2) + "\n", encoding="utf-8")
-    REPORT_MD.write_text(render_markdown(out_data), encoding="utf-8")
-    WEB_BENCH_MJS.write_text(render_web_mjs(out_data), encoding="utf-8")
+    ARTIFACTS_JSON.write_text(json.dumps(out_data, indent=2) + "\n", encoding="utf-8", newline="\n")
+    REPORT_MD.write_text(render_markdown(out_data), encoding="utf-8", newline="\n")
+    WEB_BENCH_MJS.write_text(render_web_mjs(out_data), encoding="utf-8", newline="\n")
     print(f"[generate-benchmarks] updated {ARTIFACTS_JSON.name}, {REPORT_MD.name}, {WEB_BENCH_MJS.name}")
     return 0
 

@@ -8,7 +8,7 @@ fi
 OUT="${2:-$ROOT/docs/assets/demo-final.mp4}"
 LIVE_CLIP="${1:-}"
 
-command -v ffmpeg 2>"$TMP_DIR/ffmpeg.log" || { cat "$TMP_DIR/ffmpeg.log" >&2; exit 1; } || { echo "[ERROR] ffmpeg required" >&2; exit 1; }
+command -v ffmpeg >/dev/null 2>&1 || { echo "[ERROR] ffmpeg required" >&2; exit 1; }
 
 SEG1="$KIT/seg1_hook.mp4"                        # 31.0s (00:00 - 00:31)
 SEG2="$KIT/seg2_workbench.mp4"                   # 59.0s (00:31 - 01:30)

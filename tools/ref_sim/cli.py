@@ -284,7 +284,7 @@ def main() -> int:
         if len(sys.argv) < 3:
             print("usage: cli.py replay <file.json>", file=sys.stderr)
             return 2
-        with open(sys.argv[2], "r", encoding="utf-8") as fh:
+        with open(sys.argv[2], "r", encoding="utf-8", newline="\n") as fh:
             data = json.load(fh)
         try:
             receipt = execute_clearing_batch(data)

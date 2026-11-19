@@ -133,3 +133,38 @@ def test_s2_golden_vectors_and_rust_cli_differential_parity() -> None:
                     proc = subprocess.run([str(cli_bin), "replay", str(pfile)], capture_output=True, text=True)
                     assert proc.returncode != 0
                     assert vec["expected_error"] in (proc.stderr + proc.stdout)
+
+
+def test_s2_v110_ref_sim_hardening_and_cli_strict_gate() -> None:
+    from tools.ref_sim.engine import (
+        WAD,
+        AssetRiskConfig,
+        ClearingEngineError,
+        _norm_addr,
+        recover_eip712_signer,
+        validate_asset_configs_selective,
+    )
+
+    # 1. Invalid/overflowing r/s in recover_eip712_signer returns None instead of crashing
+    assert recover_eip712_signer(b"\x00" * 32, 27, -1, 1) is None
+    assert recover_eip712_signer(b"\x00" * 32, 27, "0xzzzz", "0x01") is None
+    assert recover_eip712_signer(b"\x00" * 32, 27, 1 << 257, 1) is None
+
+    # 2. Invalid hex address raises ClearingEngineError instead of raw ValueError
+    try:
+        _norm_addr("0x" + "g" * 40)
+        raise AssertionError("expected ClearingEngineError")
+    except ClearingEngineError as err:
+        assert err.code == "InvalidAssetConfig"
+
+    # 3. > 16 assets raises BatchCapacityExceeded
+    too_many = [AssetRiskConfig(i, WAD, 0, 500, 250, 6, 100) for i in range(17)]
+    try:
+        validate_asset_configs_selective(too_many, 1, 100, 3600)
+        raise AssertionError("expected BatchCapacityExceeded")
+    except ClearingEngineError as err:
+        assert err.code == "BatchCapacityExceeded"
+
+    # 4. Strict CLI enforcement when STYLUSCLEAR_REQUIRE_CLI=1
+    if os.environ.get("STYLUSCLEAR_REQUIRE_CLI") == "1":
+        assert _find_cli() is not None, "clearing-cli binary required when STYLUSCLEAR_REQUIRE_CLI=1"

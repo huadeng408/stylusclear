@@ -3,7 +3,7 @@
  */
 import assert from "node:assert/strict";
 import http from "node:http";
-import { encodeErrorResult } from "viem";
+import { encodeErrorResult } from "../web/dist/rpc-client.mjs";
 import {
   PRESET_SCENARIOS,
   SETTLEMENT_ENGINE_ABI,
@@ -136,3 +136,21 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
+// v1.1.0 regressions: zero-node_modules bundle, normalizeBigIntId validation, fullDebtClearance dust, oracleBandGuard counter-intent
+assert.throws(() => normalizeBigIntId(""), /Invalid uint64/);
+assert.throws(() => normalizeBigIntId("-1"), /Invalid uint64/);
+assert.equal(normalizeBigIntId("421614"), 421614n);
+const dustLiq = previewUnderwaterLiquidation({
+  underwaterBalances: [5_000n * WAD, -500_000_000n, 0n, 0n],
+  liquidatorBalances: [0n, 1_000_000_000n, 0n, 0n],
+  debtAsset: 1,
+  collateralAsset: 0,
+  repayAmountWad: 500_000_000n,
+});
+assert.equal(dustLiq.ok, false, "healthy account cannot be liquidated");
+const obgPayload = buildLiveScenarioPayloads("oracleBandGuard", { chainId: 421614 });
+assert.equal(obgPayload.intents.length, 2, "oracleBandGuard must include crossing BUY+SELL intents");
+assert.equal(obgPayload.intents[0].side, 0);
+assert.equal(obgPayload.intents[1].side, 1);
+console.log("[seam-s3] v1.1.0 web regressions passed (zero node_modules)");

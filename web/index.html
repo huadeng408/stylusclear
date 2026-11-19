@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>StylusClear v1.0.0 — Multilateral Clearing & Margin Workbench</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https: http://127.0.0.1:* http://localhost:*; img-src 'self' data:;" />
+  <title>StylusClear v1.1.0 — Multilateral Clearing & Margin Workbench</title>
   <style>
     :root {
       --bg: #070b14;
@@ -91,8 +92,8 @@
   <header>
     <div>
       <div class="brand">
-        <h1>StylusClear v1.0.0</h1>
-        <span class="badge">WASM 1.0 MVP · 24,501 B Brotli-q11</span>
+        <h1>StylusClear v1.1.0</h1>
+        <span class="badge">WASM 1.0 MVP · 24,484 B Brotli-q11</span>
         <span class="badge green" id="z3Badge">Z3 6/6 UNSAT · 100/100 CLI Fuzz</span>
       </div>
       <div class="subtitle">Solverless Multilateral Obligation Compression + 512-Bit UCPBA + Adaptive Floor Liquidation</div>
@@ -156,12 +157,12 @@
     </div>
     <div class="kpi">
       <div class="k-label">Stylus WASM Binary</div>
-      <div class="k-val" id="kpiWasm">24,501 B</div>
+      <div class="k-val" id="kpiWasm">24,484 B</div>
       <div class="k-sub">Brotli-q11 (&lt; 24 KiB &amp; 96 KB ArbOS 61)</div>
     </div>
     <div class="kpi">
       <div class="k-label">Stress Gas (44 Desks)</div>
-      <div class="k-val" id="kpiGasCompare">2.26M vs 18.28M</div>
+      <div class="k-val" id="kpiGasCompare">2.26M vs 18.30M</div>
       <div class="k-sub" id="kpiSpeedup">Stylus vs Cold EVM (&lt;32M Block Cap)</div>
     </div>
   </section>
@@ -200,7 +201,7 @@
   <section class="bottom-grid">
     <div class="card">
       <h2>
-        <span>Empirical Cold-Storage EVM (vm.cool) vs Stylus wasmi Fuel</span>
+        <span>Cold-Storage EVM (vm.cool, runs=200) vs Stylus Analytical HostIO Model</span>
         <span class="mono" style="font-size:11px;color:var(--amber);">solc 0.8.38 via_ir · Arbitrum 32M Cap</span>
       </h2>
       <table>
@@ -210,7 +211,7 @@
             <th>Desks / Obs / Intents</th>
             <th>Cycles</th>
             <th>Cold EVM Gas</th>
-            <th>WASM Fuel</th>
+            <th>Analytical WASM Ops</th>
             <th>Stylus Gas Est.</th>
             <th>Gas Saved</th>
           </tr>
@@ -243,9 +244,11 @@
     const fmtWad = (v, digits = 2) => {
       const sign = v < 0n ? "-" : "";
       const abs = v < 0n ? -v : v;
-      const whole = abs / WAD;
-      const frac = ((abs % WAD) * 100n) / WAD;
-      return `${sign}${whole.toLocaleString("en-US")}.${String(frac).padStart(digits, "0")}`;
+      const scale = 10n ** BigInt(digits);
+      const scaled = (abs * scale) / WAD;
+      const whole = scaled / scale;
+      const frac = (scaled % scale).toString().padStart(digits, "0");
+      return `${sign}${whole.toLocaleString("en-US")}.${frac}`;
     };
 
     function renderBenchTable() {
@@ -295,7 +298,7 @@
         <div style="padding:8px 10px;background:#091122;border-radius:8px;border:1px solid #1c2c4c;">
           <strong style="color:var(--amber);">2. Floor Proportional Cap (1,000 USDC Cap):</strong>
           Request <span class="mono">1.00 WETH</span> &rarr; Capped Seize <span class="mono">$${fmtWad(p2.seizedCollateralWad)} USDC</span>,
-          Floor Back-Calculated Repay <span class="mono">${(Number(p2.repaidDebtWad) / 1e18).toFixed(6)} WETH</span> (Zero Overcharge).
+          Floor Back-Calculated Repay <span class="mono">${fmtWad(p2.repaidDebtWad, 6)} WETH</span> (Zero Overcharge).
         </div>
       `;
     }
@@ -350,9 +353,7 @@
         statusBadge.className = "badge green";
       }
 
-      if (scenarioId === "robinhoodUsdgMesh") {
-        document.getElementById("networkSelect").value = "46630";
-      }
+
       const netVal = document.getElementById("networkSelect").value;
       document.getElementById("chainBadge").textContent =
         netVal === "46630" ? "Robinhood Chain Testnet (46630)" : "Arbitrum Sepolia (421614)";
@@ -396,18 +397,25 @@
     const params = new URLSearchParams(window.location.search);
     const rawScenario = params.get("scenario") || "institutionalMesh";
     const initScenario = Object.prototype.hasOwnProperty.call(PRESET_SCENARIOS, rawScenario) ? rawScenario : "institutionalMesh";
-    const rawDesks = Number(params.get("desks") || "4");
-    const initDesks = Number.isFinite(rawDesks) && rawDesks >= 4 && rawDesks <= 64 ? rawDesks : 4;
+    const rawDesks = Number(params.get("desks") || "12");
+    const initDesks = Number.isFinite(rawDesks) && rawDesks >= 4 && rawDesks <= 64 ? rawDesks : 12;
     document.getElementById("scenarioSelect").value = initScenario;
     document.getElementById("deskSlider").value = String(initDesks);
 
-    document.getElementById("scenarioSelect").addEventListener("change", (e) => applyScenario(e.target.value));
+    document.getElementById("scenarioSelect").addEventListener("change", (e) => {
+      if (e.target.value === "robinhoodUsdgMesh") {
+        document.getElementById("networkSelect").value = "46630";
+      }
+      applyScenario(e.target.value);
+    });
     document.getElementById("networkSelect").addEventListener("change", () => applyScenario(document.getElementById("scenarioSelect").value));
     document.getElementById("deskSlider").addEventListener("input", (e) => {
       const sc = PRESET_SCENARIOS[document.getElementById("scenarioSelect").value];
       renderMeshSvg(Number(e.target.value), sc);
     });
+    let latestRpcReqId = 0;
     async function runLiveDualVmParity() {
+      const reqId = ++latestRpcReqId;
       const scenarioId = document.getElementById("scenarioSelect").value;
       applyScenario(scenarioId);
       const netVal = document.getElementById("networkSelect").value;
@@ -415,21 +423,23 @@
       const badge = document.getElementById("statusBadge");
       try {
         const res = await fetch(manifestUrl);
-        if (!res.ok) return;
+        if (!res.ok || reqId !== latestRpcReqId) return;
         const cfg = await res.json();
-        if (!cfg.stylusEngineAddress && !cfg.solidityBenchmarkAddress) {
+        const { isValidDeployedAddress, simulateSettleBatchKeyless } = await import("./dist/rpc-client.mjs");
+        if (reqId !== latestRpcReqId) return;
+        const targets = [
+          isValidDeployedAddress(cfg.stylusEngineAddress) ? { vm: "Stylus", addr: cfg.stylusEngineAddress } : null,
+          isValidDeployedAddress(cfg.solidityBenchmarkAddress) ? { vm: "Solidity", addr: cfg.solidityBenchmarkAddress } : null,
+        ].filter(Boolean);
+        if (targets.length === 0) {
           badge.textContent = "LOCAL PARITY VERIFIED · AWAITING LIVE DEPLOY";
           return;
         }
         const payload = buildLiveScenarioPayloads(scenarioId, cfg);
-        const { simulateSettleBatchKeyless } = await import("./dist/rpc-client.mjs");
-        const targets = [
-          cfg.stylusEngineAddress ? { vm: "Stylus", addr: cfg.stylusEngineAddress } : null,
-          cfg.solidityBenchmarkAddress ? { vm: "Solidity", addr: cfg.solidityBenchmarkAddress } : null,
-        ].filter(Boolean);
         const results = await Promise.all(
           targets.map((t) => simulateSettleBatchKeyless({ rpcUrl: cfg.rpcUrl, engineAddress: t.addr, ...payload }))
         );
+        if (reqId !== latestRpcReqId) return;
         const first = results[0];
         const dualMatch = results.length < 2 || (results[0].ok === results[1].ok && results[0].errorName === results[1].errorName);
         badge.className = first.ok && dualMatch ? "badge green" : "badge red";

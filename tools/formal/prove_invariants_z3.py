@@ -67,7 +67,7 @@ def run_all_z3_proofs() -> list[dict[str, Any]]:
         p_c = z3.Int("p_c")
         bonus = z3.If(mm_d / 2 < 250, mm_d / 2, 250)
         s.add(mm_d >= 2, mm_d <= 10000)
-        s.add(haircut_c >= 0, haircut_c <= 5000)
+        s.add(haircut_c >= 0, haircut_c <= 9999)
         s.add(repay_amt >= MIN_INTENT_AMOUNT_WAD, repay_amt <= 10**24)
         s.add(p_d >= 10**15, p_d <= 10**24)
         s.add(p_c >= 10**15, p_c <= 10**24)
@@ -205,18 +205,18 @@ def run_all_z3_proofs() -> list[dict[str, Any]]:
         bal_a_pre = raw_a * scale
         bal_b_pre = raw_b * scale
         # After account A withdraws wd_a raw units and fee vault absorbs 0..scale-1 rounding dust within conservation
-        s.add(dust_fee >= 0, dust_fee < scale)
+        s.add(dust_fee >= 0, dust_fee < scale, dust_fee <= (raw_a - wd_a) * scale)
         vault_post = vault_pre - wd_a
-        bal_a_post = bal_a_pre - wd_a * scale
+        bal_a_post = bal_a_pre - wd_a * scale - dust_fee
         bal_b_post = bal_b_pre
-        # Solvency invariant: remaining vault physical raw * scale >= sum of remaining positive user balances
+        # Solvency invariant: remaining vault physical raw * scale >= sum of remaining user balances + fee vault dust
         # and account B can still withdraw 100% of raw_b
         s.add(
             z3.Or(
                 vault_pre * scale > U256_MAX,
                 vault_post < raw_b,
-                vault_post * scale < bal_a_post + bal_b_post,
-                bal_a_post % scale != 0,
+                vault_post * scale < bal_a_post + bal_b_post + dust_fee,
+                (bal_a_post + dust_fee) % scale != 0,
             )
         )
 
@@ -270,8 +270,8 @@ def _find_clearing_cli() -> Path | None:
         )
     candidates.extend(
         [
-            ROOT / "target" / "release" / "clearing-cli",
-            ROOT / "target" / "debug" / "clearing-cli",
+            ROOT / "target" / "release" / ("clearing-cli.exe" if sys.platform == "win32" else "clearing-cli"),
+            ROOT / "target" / "debug" / ("clearing-cli.exe" if sys.platform == "win32" else "clearing-cli"),
         ]
     )
     for cand in candidates:
@@ -502,7 +502,7 @@ def main() -> int:
     theorems = run_all_z3_proofs()
     fuzz = run_hypothesis_differential_fuzz(max_examples=args.examples, require_cli=args.require_cli)
     report = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "z3_version": z3.get_version_string(),
         "theorems_proved": len(theorems),
         "all_unsat": all(t["status"] == "PROVED_UNSAT" for t in theorems),
@@ -511,7 +511,7 @@ def main() -> int:
     }
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    out_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(
         f"[formal] OK: {len(theorems)}/{len(theorems)} Z3 theorems PROVED_UNSAT "
         f"| Hypothesis {fuzz['examples_checked']} examples "

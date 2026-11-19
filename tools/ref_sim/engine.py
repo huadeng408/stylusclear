@@ -19,14 +19,17 @@ from tools.ref_sim.crypto_eip712 import (
 
 
 def recover_eip712_signer(digest: bytes, v: int, r_hex: str | int, s_hex: str | int) -> str | None:
-    if isinstance(r_hex, int):
-        rb = r_hex.to_bytes(32, "big")
-    else:
-        rb = int(str(r_hex), 16).to_bytes(32, "big")
-    if isinstance(s_hex, int):
-        sb = s_hex.to_bytes(32, "big")
-    else:
-        sb = int(str(s_hex), 16).to_bytes(32, "big")
+    try:
+        if isinstance(r_hex, int):
+            rb = r_hex.to_bytes(32, "big")
+        else:
+            rb = int(str(r_hex), 16).to_bytes(32, "big")
+        if isinstance(s_hex, int):
+            sb = s_hex.to_bytes(32, "big")
+        else:
+            sb = int(str(s_hex), 16).to_bytes(32, "big")
+    except (ValueError, OverflowError):
+        return None
     return ecrecover(digest, v, rb, sb)
 
 
@@ -181,7 +184,10 @@ def _norm_addr(addr: str) -> str:
     s = s.removeprefix("0x")
     if len(s) != 40:
         raise ClearingEngineError("InvalidAssetConfig", f"bad address {addr}")
-    int(s, 16)
+    try:
+        int(s, 16)
+    except ValueError as exc:
+        raise ClearingEngineError("InvalidAssetConfig", f"bad hex address {addr}") from exc
     return "0x" + s
 
 
@@ -195,6 +201,8 @@ def validate_asset_configs_selective(
     block_timestamp: int,
     max_price_staleness: int,
 ) -> None:
+    if len(assets) > MAX_ASSETS:
+        raise ClearingEngineError("BatchCapacityExceeded")
     if block_timestamp < 0 or block_timestamp > U64_MAX or max_price_staleness < 0 or max_price_staleness > U64_MAX:
         raise ClearingEngineError("InvalidAssetConfig", "u64 timestamp bounds")
     for idx, cfg in enumerate(assets):
@@ -957,7 +965,9 @@ def execute_batch_payload(payload: dict) -> dict:
             auctions.append(report)
 
     for a in range(num_assets):
-        post_sum = _check_i256(fee_deltas[a] + sum(bals[u][a] for u in range(num_accounts)))
+        post_sum = _check_i256(fee_deltas[a])
+        for u in range(num_accounts):
+            post_sum = _check_i256(post_sum + bals[u][a])
         if post_sum != pre_sums[a]:
             raise ClearingEngineError("AssetConservationViolated")
 

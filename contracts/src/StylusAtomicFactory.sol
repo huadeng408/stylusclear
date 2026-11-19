@@ -32,7 +32,9 @@ contract StylusAtomicFactory {
         bool stylusActivated
     );
 
-    receive() external payable {}
+    receive() external payable {
+        if (msg.sender != ARB_WASM) revert RefundFailed();
+    }
 
     function deriveGuardedSalt(address deployer, address initialAdmin, bytes32 userSalt) public pure returns (bytes32) {
         return keccak256(abi.encode(deployer, initialAdmin, userSalt));

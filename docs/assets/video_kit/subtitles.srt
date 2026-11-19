@@ -10,13 +10,13 @@ quickly saturate standard EVM execution.
 
 3
 00:00:11,500 --> 00:00:17,500
-StylusClear v1.0.0 solves this in no_std
+StylusClear v1.1.0 solves this in no_std
 Rust compiled for Arbitrum Stylus.
 
 4
 00:00:17,500 --> 00:00:24,500
-Zero-patch WASM 1.0 MVP: 24,501 B Brotli-q11
-(71 B below 24 KiB legacy & 96 KB ArbOS 61 caps).
+Zero-patch WASM 1.0 MVP: 24,484 B Brotli-q11
+(88 B below 24 KiB legacy & 96 KB ArbOS 61 caps).
 
 5
 00:00:24,500 --> 00:00:30,600
@@ -105,8 +105,8 @@ eliminated cycles on both Foundry & Rust.
 
 22
 00:02:35,000 --> 00:02:43,500
-Stress tier drops from 18.28M cold EVM gas
-to 2.26M Stylus est.: -87.7% (8.10x savings).
+Stress tier drops from 18.30M cold EVM gas
+to 2.26M Stylus est.: -87.7% (8.11x savings).
 
 23
 00:02:43,500 --> 00:02:51,000
@@ -120,10 +120,10 @@ Hypothesis fuzz runs cross-checked vs Rust CLI.
 
 25
 00:02:59,500 --> 00:03:06,500
-16/16 Foundry, 8/8 Cargo (0 clippy), 7/7
+17/17 Foundry, 8/8 Cargo (0 clippy), 8/8
 Pytest, and 37-method Seam S3 gates passing.
 
 26
 00:03:06,500 --> 00:03:12,600
-StylusClear v1.0.0 — 5-stage verification
+StylusClear v1.1.0 — 5-stage verification
 in under 20 seconds via verify-judge-60s.sh.

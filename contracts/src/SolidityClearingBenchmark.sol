@@ -68,15 +68,15 @@ contract SolidityClearingBenchmark is ISettlementEngine {
 
     address internal _admin;
     address internal _pendingAdmin;
-    bool public benchmarkSeedingEnabled;
-    bool public override permissionlessSolver;
+    bool internal _benchmarkSeedingEnabled;
+    bool internal _permissionlessSolver;
     uint64 internal _currentEpoch;
-    uint64 public override maxPriceStaleness;
-    uint16 public override maxPriceDeviationBps;
+    uint64 internal _maxPriceStaleness;
+    uint16 internal _maxPriceDeviationBps;
     uint8 internal _assetCount;
     uint8 internal _unlocked = 1;
 
-    mapping(address => bool) public override approvedSolvers;
+    mapping(address => bool) internal _approvedSolvers;
     mapping(uint8 => AssetConfig) internal _assets;
     mapping(address => mapping(uint8 => int256)) internal _balances;
     mapping(address => mapping(address => mapping(uint8 => uint256))) internal _confirmedObligations;
@@ -118,7 +118,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
     }
 
     function _checkFreshMask(uint16 mask, uint8 nAssets) internal view {
-        uint256 maxStale = maxPriceStaleness;
+        uint256 maxStale = _maxPriceStaleness;
         unchecked {
             for (uint8 a = 0; a < nAssets; ++a) {
                 if ((mask & (uint16(1) << a)) != 0) {
@@ -165,12 +165,12 @@ contract SolidityClearingBenchmark is ISettlementEngine {
 
     function _initInternal(address admin_, bool seeding_) internal {
         _admin = admin_;
-        benchmarkSeedingEnabled = seeding_;
-        permissionlessSolver = true;
+        _benchmarkSeedingEnabled = seeding_;
+        _permissionlessSolver = true;
         _currentEpoch = 1;
-        maxPriceStaleness = 3600;
-        maxPriceDeviationBps = 2000;
-        approvedSolvers[admin_] = true;
+        _maxPriceStaleness = 3600;
+        _maxPriceDeviationBps = 2000;
+        _approvedSolvers[admin_] = true;
     }
 
     function admin() public view override checkUnlocked returns (address) {
@@ -179,6 +179,26 @@ contract SolidityClearingBenchmark is ISettlementEngine {
 
     function pendingAdmin() external view override checkUnlocked returns (address) {
         return _pendingAdmin;
+    }
+
+    function benchmarkSeedingEnabled() external view override checkUnlocked returns (bool) {
+        return _benchmarkSeedingEnabled;
+    }
+
+    function permissionlessSolver() external view override checkUnlocked returns (bool) {
+        return _permissionlessSolver;
+    }
+
+    function maxPriceStaleness() external view override checkUnlocked returns (uint64) {
+        return _maxPriceStaleness;
+    }
+
+    function maxPriceDeviationBps() external view override checkUnlocked returns (uint16) {
+        return _maxPriceDeviationBps;
+    }
+
+    function approvedSolvers(address solver) external view override checkUnlocked returns (bool) {
+        return _approvedSolvers[solver];
     }
 
     function transferAdmin(address newAdmin) external override checkUnlocked {
@@ -193,8 +213,8 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         address prev = _admin;
         _admin = msg.sender;
         _pendingAdmin = address(0);
-        approvedSolvers[prev] = false;
-        approvedSolvers[msg.sender] = true;
+        _approvedSolvers[prev] = false;
+        _approvedSolvers[msg.sender] = true;
         emit AdminTransferred(prev, msg.sender);
     }
 
@@ -386,16 +406,16 @@ contract SolidityClearingBenchmark is ISettlementEngine {
     function setRiskWindows(uint64 maxStaleness, uint16 maxDeviationBps, bool permissionless) external override checkUnlocked {
         _onlyAdmin();
         if (maxStaleness == 0 || maxDeviationBps == 0 || maxDeviationBps > 5000) _rev(InvalidAssetConfig.selector);
-        maxPriceStaleness = maxStaleness;
-        maxPriceDeviationBps = maxDeviationBps;
-        permissionlessSolver = permissionless;
-        approvedSolvers[_admin] = true;
+        _maxPriceStaleness = maxStaleness;
+        _maxPriceDeviationBps = maxDeviationBps;
+        _permissionlessSolver = permissionless;
+        _approvedSolvers[_admin] = true;
     }
 
     function setApprovedSolver(address solver, bool approved) external override checkUnlocked {
         _onlyAdmin();
         if (solver == address(0) || (solver == _admin && !approved)) _rev(InvalidAssetConfig.selector);
-        approvedSolvers[solver] = approved;
+        _approvedSolvers[solver] = approved;
         emit SolverApprovalUpdated(solver, approved);
     }
 
@@ -676,7 +696,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
     }
 
     function seedAccountBalance(address trader, uint8 assetId, int256 balanceWad) external override checkUnlocked {
-        if (_admin == address(0) || msg.sender != _admin || !benchmarkSeedingEnabled) _rev(UnauthorizedCaller.selector);
+        if (_admin == address(0) || msg.sender != _admin || !_benchmarkSeedingEnabled) _rev(UnauthorizedCaller.selector);
         if (trader == address(0) || assetId >= _assetCount || _assets[assetId].token != address(0)) _rev(InvalidAssetConfig.selector);
         _balances[trader][assetId] = balanceWad;
     }
@@ -844,7 +864,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         SignedTradeIntent[] calldata intents
     ) external override checkUnlocked returns (uint32 cyclesEliminated, uint256 totalMatchedVolumeWad) {
         unchecked {
-        if (!permissionlessSolver && !approvedSolvers[msg.sender]) _rev(UnauthorizedCaller.selector);
+        if (!_permissionlessSolver && !_approvedSolvers[msg.sender]) _rev(UnauthorizedCaller.selector);
 
         uint8 nAssets = _assetCount;
         uint256 nAcc = participants.length;
@@ -880,7 +900,6 @@ contract SolidityClearingBenchmark is ISettlementEngine {
                 preBals[u][a] = b;
                 workBals[u][a] = b;
             }
-            preRisks[u] = _evaluateRisk(preBals[u], nAssets);
         }
 
         for (uint256 i = 0; i < obligations.length; i++) {
@@ -894,6 +913,9 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         }
         if (activeMask == 0) activeMask = 1;
         _checkFreshMask(activeMask, nAssets);
+        for (uint256 u = 0; u < nAcc; u++) {
+            preRisks[u] = _evaluateRisk(preBals[u], nAssets);
+        }
 
         bytes32 domSep = domainSeparator();
         uint64 epoch = _currentEpoch;
@@ -1084,6 +1106,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
     ) internal view returns (WorkIntent[] memory workIts) {
         unchecked {
         workIts = new WorkIntent[](intents.length);
+        if (intents.length == 0) return workIts;
         uint8[] memory traderPairSides = new uint8[](nAcc * 256);
         for (uint256 i = 0; i < intents.length; i++) {
             SignedTradeIntent calldata it = intents[i];
@@ -1244,7 +1267,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
             if (refPrice == 0) _rev(InvalidAssetConfig.selector);
             uint256 refTick = _quantizeRefTick(refPrice);
 
-            uint256 dev = maxPriceDeviationBps;
+            uint256 dev = _maxPriceDeviationBps;
             uint256 bandLow = dev >= BPS_DENOM
                 ? 1
                 : FullMath512.mulDivCeil(refPrice, BPS_DENOM - dev, BPS_DENOM);

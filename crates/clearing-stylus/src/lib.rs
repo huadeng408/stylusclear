@@ -1343,11 +1343,14 @@ impl StylusClearingEngine {
                     already = self.get_partial_fill(participants[tr], &it.nonce);
                     if !already.is_zero() {
                         if cmp_u256(&already, &it.amount_wad).is_ge() {
-                            return Err(ClearingError::NonceAlreadyUsed);
+                            // Mark bit in working bitmap so Stage 2 enforces identical error precedence as Solidity
+                            let updated = w_cur | (U256::from(1u64) << usize::from(bit));
+                            nonce_bitmaps.insert((it.trader, wp), updated);
+                        } else {
+                            let mut rem = it.amount_wad;
+                            usub_assign(&mut rem, &already)?;
+                            dto.amount_wad = rem;
                         }
-                        let mut rem = it.amount_wad;
-                        usub_assign(&mut rem, &already)?;
-                        dto.amount_wad = rem;
                     }
                 }
             }
@@ -2290,5 +2293,17 @@ mod tests {
             dispatch(seedAccountBalanceCall { trader: Address::ZERO, assetId: 2, balanceWad: iwad }.abi_encode()),
             Err(InvalidAssetConfig {}.abi_encode())
         );
+        // v1.1.0 P0-4: TestVM reentrancy guard MUST block both state-mutating and view calls
+        vm.set_reentrant(true);
+        let reent_err = alloy_primitives::keccak256(b"UnauthorizedCaller()")[..4].to_vec();
+        assert_eq!(
+            dispatch(SEL_BENCHMARK_SEEDING.to_be_bytes().to_vec()),
+            Err(reent_err.clone())
+        );
+        assert_eq!(
+            dispatch(absorbBadDebtCall { underwater: leaf, debtAsset: 1 }.abi_encode()),
+            Err(reent_err)
+        );
+        vm.set_reentrant(false);
     }
 }

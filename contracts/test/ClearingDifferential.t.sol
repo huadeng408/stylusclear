@@ -32,13 +32,13 @@ contract GoldenHarness is SolidityClearingBenchmark {
     function harnessInitAfterEtch(address admin_, uint64 batchEpoch) external {
         if (_admin != address(0)) revert UnauthorizedCaller();
         _admin = admin_;
-        benchmarkSeedingEnabled = true;
+        _benchmarkSeedingEnabled = true;
         _unlocked = 1;
-        permissionlessSolver = true;
+        _permissionlessSolver = true;
         _currentEpoch = batchEpoch;
-        maxPriceStaleness = 3600;
-        maxPriceDeviationBps = 2000;
-        approvedSolvers[admin_] = true;
+        _maxPriceStaleness = 3600;
+        _maxPriceDeviationBps = 2000;
+        _approvedSolvers[admin_] = true;
     }
 }
 
@@ -934,5 +934,18 @@ contract ClearingBenchmarkGas {
 
     function testBench04_Stress_44Acc_88Ob_88Intent() public {
         _runWorkload("Stress", 44, 88, 45, 88);
+    }
+
+    function testV110_FactoryRejectsStrayEthAndFiveGettersParity() public {
+        StylusAtomicFactory fac = new StylusAtomicFactory();
+        (bool ok, ) = address(fac).call{value: 1 wei}("");
+        require(!ok, "factory receive() must reject non-ArbWasm ETH");
+
+        SolidityClearingBenchmark sim = new SolidityClearingBenchmark(address(this), true);
+        require(sim.benchmarkSeedingEnabled(), "benchmarkSeedingEnabled getter");
+        require(sim.permissionlessSolver(), "permissionlessSolver getter");
+        require(sim.maxPriceStaleness() == 3600, "maxPriceStaleness getter");
+        require(sim.maxPriceDeviationBps() == 2000, "maxPriceDeviationBps getter");
+        require(!sim.approvedSolvers(address(0x1234)), "approvedSolvers getter");
     }
 }

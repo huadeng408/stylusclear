@@ -203,7 +203,7 @@ impl HostEnv {
     fn raw_call(&self, to: Address, data: &[u8], is_static: bool) -> Option<Vec<u8>> {
         let mut ret_len: usize = 0;
         let status = unsafe {
-            wasm_ffi::storage_flush_cache(false);
+            wasm_ffi::storage_flush_cache(!is_static);
             if is_static {
                 wasm_ffi::static_call_contract(
                     to.as_slice().as_ptr(),

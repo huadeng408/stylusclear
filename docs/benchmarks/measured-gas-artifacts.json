@@ -1,13 +1,13 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "calibration_status": "host_replay_analytical_and_foundry_measured",
   "methodology_disclosure": "Offline analytical proxy: Rust clearing-cli replay verifies isomorphic cycle topology & matched volume; WASM compute ink is analytically modeled and combined with complete EIP-2929 HostIO cold-storage pricing (including 8 config slots, all get_partial_fill cold SLOADs, and memory_grow). Live on-chain eth_estimateGas & evm_ink_left() calibration runs upon testnet deployment.",
   "wasm_binary": {
     "path": "artifacts/clearing_stylus.wasm",
-    "raw_bytes": 65673,
-    "brotli_q11_bytes": 24501,
-    "brotli_with_4b_header_bytes": 24505,
-    "sha256": "174dda6effaf78c267c660deb396772e07d3869f710e7eebaa21d4d3e6a2cc91",
+    "raw_bytes": 65845,
+    "brotli_q11_bytes": 24484,
+    "brotli_with_4b_header_bytes": 24488,
+    "sha256": "eeb23f80174924ea880bebc7cd50bf35d04697be1e4ee3f6cc84d00e06b55277",
     "zero_float_opcodes_verified": true,
     "zero_post_mvp_opcodes_verified": true
   },
@@ -24,7 +24,7 @@
       "obligations": 5,
       "cycles_eliminated": 2,
       "intents": 4,
-      "solidity_evm_gas": 459327,
+      "solidity_evm_gas": 460188,
       "wasm_instructions": 5406000,
       "cold_sloads": 29,
       "warm_sstores": 18,
@@ -36,7 +36,7 @@
       "stylus_compute_gas": 3893,
       "stylus_storage_hostio_gas": 199546,
       "stylus_total_gas_est": 203439,
-      "gas_reduction_pct": 55.71,
+      "gas_reduction_pct": 55.79,
       "speedup_x": 2.26
     },
     {
@@ -45,7 +45,7 @@
       "obligations": 20,
       "cycles_eliminated": 9,
       "intents": 24,
-      "solidity_evm_gas": 2416506,
+      "solidity_evm_gas": 2419313,
       "wasm_instructions": 23486000,
       "cold_sloads": 88,
       "warm_sstores": 57,
@@ -57,7 +57,7 @@
       "stylus_compute_gas": 16910,
       "stylus_storage_hostio_gas": 598671,
       "stylus_total_gas_est": 615581,
-      "gas_reduction_pct": 74.53,
+      "gas_reduction_pct": 74.56,
       "speedup_x": 3.93
     },
     {
@@ -66,7 +66,7 @@
       "obligations": 64,
       "cycles_eliminated": 33,
       "intents": 64,
-      "solidity_evm_gas": 10574871,
+      "solidity_evm_gas": 10583087,
       "wasm_instructions": 87682000,
       "cold_sloads": 232,
       "warm_sstores": 161,
@@ -78,8 +78,8 @@
       "stylus_compute_gas": 63132,
       "stylus_storage_hostio_gas": 1583747,
       "stylus_total_gas_est": 1646879,
-      "gas_reduction_pct": 84.43,
-      "speedup_x": 6.42
+      "gas_reduction_pct": 84.44,
+      "speedup_x": 6.43
     },
     {
       "tier": "Stress",
@@ -87,7 +87,7 @@
       "obligations": 88,
       "cycles_eliminated": 45,
       "intents": 88,
-      "solidity_evm_gas": 18284228,
+      "solidity_evm_gas": 18296420,
       "wasm_instructions": 136990000,
       "cold_sloads": 316,
       "warm_sstores": 221,
@@ -99,22 +99,14 @@
       "stylus_compute_gas": 98633,
       "stylus_storage_hostio_gas": 2157659,
       "stylus_total_gas_est": 2256292,
-      "gas_reduction_pct": 87.66,
-      "speedup_x": 8.1
+      "gas_reduction_pct": 87.67,
+      "speedup_x": 8.11
     }
   ],
   "onchain_verification": {
-    "network": "arbitrum-sepolia",
-    "chain_id": 421614,
-    "explorer_base_url": "https://sepolia.arbiscan.io",
-    "stylus_contract_address": null,
-    "solidity_benchmark_address": null,
-    "stylus_settle_tx_hash": null,
-    "solidity_settle_tx_hash": null,
-    "stylus_receipt_gas_used": null,
-    "solidity_receipt_gas_used": null,
-    "stylus_telemetry_wasm_ink": null,
-    "stylus_telemetry_compute_gas": null,
-    "onchain_gas_saved_pct": null
+    "arbitrum_sepolia_tx": null,
+    "arbitrum_sepolia_stylus_gas": null,
+    "arbitrum_sepolia_solidity_gas": null,
+    "robinhood_testnet_tx": null
   }
 }

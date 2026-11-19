@@ -1,8 +1,9 @@
 /**
  * StylusClear v1.0.0 Dual-Chain JSON-RPC & Keyless Simulation Client
- * Supports Arbitrum Sepolia (421614) & Robinhood Chain Testnet (46630) with full 29-method ABI parity.
+ * Supports Arbitrum Sepolia (421614) & Robinhood Chain Testnet (46630) with full 37-method ABI parity.
  */
-import { createPublicClient, decodeErrorResult, encodeFunctionData, http, parseAbi } from "viem";
+import { createPublicClient, decodeErrorResult, encodeErrorResult, encodeFunctionData, http, parseAbi } from "viem";
+export { encodeErrorResult };
 
 export const SUPPORTED_NETWORKS = {
   421614: {
@@ -130,8 +131,17 @@ export function isValidDeployedAddress(addr: string | null | undefined): addr is
 }
 
 export function normalizeBigIntId(val: bigint | number | string): bigint {
-  if (typeof val === "bigint") return val;
-  if (typeof val === "string") return BigInt(val.trim());
+  if (typeof val === "bigint") {
+    if (val < 0n) throw new Error(`Negative bigint uint64/chainId: ${val}`);
+    return val;
+  }
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (!/^(\d+|0x[0-9a-fA-F]+)$/.test(trimmed)) {
+      throw new Error(`Invalid uint64/chainId string: "${val}"`);
+    }
+    return BigInt(trimmed);
+  }
   if (!Number.isSafeInteger(val) || val < 0) {
     throw new Error(`Unsafe numeric uint64/chainId: ${val}; pass string or bigint`);
   }
@@ -147,7 +157,12 @@ export async function simulateSettleBatchKeyless(args: LiveBatchCallArgs): Promi
       errorName: "EngineAddressNotDeployedYet",
     };
   }
-  const client = createPublicClient({ transport: http(args.rpcUrl) });
+  const parsedUrl = new URL(args.rpcUrl);
+  const isLocal = parsedUrl.hostname === "127.0.0.1" || parsedUrl.hostname === "localhost";
+  if (parsedUrl.protocol !== "https:" && !(parsedUrl.protocol === "http:" && isLocal)) {
+    throw new Error(`Unsupported RPC URL protocol: ${parsedUrl.protocol}`);
+  }
+  const client = createPublicClient({ transport: http(args.rpcUrl, { timeout: 15_000 }) });
   const chainIdBig = args.chainId !== undefined ? normalizeBigIntId(args.chainId) : BigInt(await client.getChainId());
   const data = encodeFunctionData({
     abi: SETTLEMENT_ENGINE_ABI,
@@ -169,12 +184,15 @@ export async function simulateSettleBatchKeyless(args: LiveBatchCallArgs): Promi
       }),
     ]);
     const hex = callRes.data ?? "0x";
-    let cycles = 0;
-    let matched = 0n;
-    if (hex.length >= 130) {
-      cycles = Number(BigInt("0x" + hex.slice(2, 66)));
-      matched = BigInt("0x" + hex.slice(66, 130));
+    if (hex.length < 130) {
+      return {
+        ok: false,
+        chainId: chainIdBig.toString(),
+        errorName: "EmptyOrInvalidReturnData",
+      };
     }
+    const cycles = Number(BigInt("0x" + hex.slice(2, 66)));
+    const matched = BigInt("0x" + hex.slice(66, 130));
     return {
       ok: true,
       chainId: chainIdBig.toString(),

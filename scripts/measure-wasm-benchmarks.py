@@ -243,8 +243,8 @@ def main() -> int:
         for label, n_acc, n_obs, exp_cyc, n_int in TIERS:
             payload = build_isomorphic_payload(n_acc, n_obs, n_int)
             pfile = Path(td) / f"{label.lower()}.json"
-            pfile.write_text(json.dumps(payload), encoding="utf-8")
-            proc = subprocess.run([str(args.cli_bin), "replay", str(pfile)], capture_output=True, text=True, check=True)
+            pfile.write_text(json.dumps(payload), encoding="utf-8", newline="\n")
+            proc = subprocess.run([str(args.cli_bin), "replay", str(pfile)], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
             res = json.loads(proc.stdout)
             got_cyc = int(res["cycles_eliminated"])
             matched = sum(int(a["matched_volume_wad"]) for a in res.get("auctions", []))

@@ -94,15 +94,25 @@ export function previewUnderwaterLiquidation({
   assets = STANDARD_ASSETS,
 }) {
   const repayReq = BigInt(repayAmountWad);
-  if (debtAsset === collateralAsset || repayReq < MIN_INTENT_AMOUNT_WAD) {
+  if (
+    debtAsset < 0 || debtAsset >= assets.length ||
+    collateralAsset < 0 || collateralAsset >= assets.length ||
+    debtAsset === collateralAsset ||
+    repayReq <= 0n
+  ) {
     return { ok: false, error: "InvalidIntent" };
   }
-  const preU = evaluateAccountRisk(underwaterBalances, assets);
-  if (preU.healthWad >= 0n || underwaterBalances[debtAsset] >= 0n || underwaterBalances[collateralAsset] <= 0n) {
+  const uBals = underwaterBalances.map(BigInt);
+  const lBals = liquidatorBalances.map(BigInt);
+  const preU = evaluateAccountRisk(uBals, assets);
+  if (preU.healthWad >= 0n || uBals[debtAsset] >= 0n || uBals[collateralAsset] <= 0n) {
     return { ok: false, error: "InvalidIntent" };
   }
-  const absDebt = -BigInt(underwaterBalances[debtAsset]);
-  const availColl = BigInt(underwaterBalances[collateralAsset]);
+  const absDebt = -uBals[debtAsset];
+  if (repayReq < MIN_INTENT_AMOUNT_WAD && repayReq < absDebt) {
+    return { ok: false, error: "InvalidIntent" };
+  }
+  const availColl = uBals[collateralAsset];
   const cappedRepay = repayReq < absDebt ? repayReq : absDebt;
   const bonusBps = computeLiquidationBonusBps(assets[debtAsset].mmBps);
   const bonusFactor = BPS_DENOM + bonusBps;
@@ -120,14 +130,15 @@ export function previewUnderwaterLiquidation({
     actualRepay = cappedRepay < backRepay ? cappedRepay : backRepay;
     actualSeize = availColl;
   }
-  if (actualSeize === 0n || actualRepay < MIN_INTENT_AMOUNT_WAD) {
+  const fullDebtClearance = actualRepay === absDebt;
+  if (actualSeize === 0n || actualRepay === 0n || (!fullDebtClearance && actualRepay < MIN_INTENT_AMOUNT_WAD)) {
     return { ok: false, error: "InvalidIntent" };
   }
-  if (BigInt(liquidatorBalances[debtAsset]) < actualRepay) {
+  if (lBals[debtAsset] < actualRepay) {
     return { ok: false, error: "InsufficientWithdrawableBalance" };
   }
-  const postUBals = [...underwaterBalances];
-  const postLBals = [...liquidatorBalances];
+  const postUBals = [...uBals];
+  const postLBals = [...lBals];
   postUBals[debtAsset] += actualRepay;
   postUBals[collateralAsset] -= actualSeize;
   postLBals[debtAsset] -= actualRepay;
@@ -368,6 +379,7 @@ export function buildLiveScenarioPayloads(scenarioId, deploymentConfig) {
       obligations: [],
       intents: [
         { trader: 0, baseAsset: 1, quoteAsset: 0, side: 0, authMode: 0, v: 0, maxEpoch, amountWad: 1n * WAD, limitPriceWad: 3900n * WAD, nonce: nonceBase, r: ZERO_B32, s: ZERO_B32 },
+        { trader: 1, baseAsset: 1, quoteAsset: 0, side: 1, authMode: 0, v: 0, maxEpoch, amountWad: 1n * WAD, limitPriceWad: 3600n * WAD, nonce: nonceBase + 1n, r: ZERO_B32, s: ZERO_B32 },
       ],
     };
   }

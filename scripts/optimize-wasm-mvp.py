@@ -11,9 +11,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -54,22 +56,27 @@ def optimize_to_mvp(src: Path, dst: Path) -> dict:
         "--signext-lowering",
         "-Oz",
         "--converge",
+        "--low-memory-unused",
+        "--zero-filled-memory",
         "--duplicate-function-elimination",
         "--merge-similar-functions",
+        "--merge-blocks",
         "--reorder-functions",
         "--reorder-locals",
         "--strip-debug",
         "--strip-producers",
         "--strip-target-features",
+        "--strip-dwarf",
     ]
     subprocess.run(cmd, check=True)
     # Strict WASM 1.0 MVP validator pass (rejects any 0xC0..0xC4 sign-ext, 0xFC bulk-memory, 0xFD SIMD, float, or reftype)
-    subprocess.run([wasm_opt, "--mvp-features", str(dst), "-o", "/dev/null"], check=True)
+    subprocess.run([wasm_opt, "--mvp-features", str(dst), "-o", os.devnull], check=True)
 
-    dis_tool = str(Path(wasm_opt).with_name("wasm-dis"))
+    dis_name = "wasm-dis.exe" if sys.platform == "win32" else "wasm-dis"
+    dis_tool = str(Path(wasm_opt).with_name(dis_name))
     zero_float = True
     if Path(dis_tool).exists():
-        wat = subprocess.run([dis_tool, str(dst)], capture_output=True, text=True, check=True).stdout
+        wat = subprocess.run([dis_tool, str(dst)], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
         if re.search(r"\b(f32|f64)\.", wat) or re.search(r"memory\.(copy|fill)|i(32|64)\.extend(8|16|32)_s", wat):
             raise RuntimeError("Post-MVP or floating-point opcode detected in optimized WASM")
 

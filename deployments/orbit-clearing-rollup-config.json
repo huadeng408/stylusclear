@@ -3,7 +3,7 @@
   "chainName": "StylusClear Institutional Clearing Orbit L3",
   "parentChainId": 421614,
   "parentChainName": "Arbitrum Sepolia",
-  "productionSettlementTarget": "Arbitrum One (42161) / Robinhood Chain (46630 -> 4663)",
+  "productionSettlementTarget": "Arbitrum One (42161) / Robinhood Chain (46630 Testnet; Mainnet TBD)",
   "arbitrumMainnetGovernanceAlignment": {
     "pauseNotice": "https://docs.arbitrum.io/notices/stylus-activation-pause-notice",
     "pauseDate": "2026-10-02",

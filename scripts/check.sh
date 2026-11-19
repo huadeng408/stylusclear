@@ -56,7 +56,9 @@ SOLC_OPT=(); if command -v solc >/dev/null 2>&1; then SOLC_OPT=(--use "$(command
 forge test "${SOLC_OPT[@]}" "${OFFLINE_OPT[@]}" -vv
 
 echo "[check 5/7] Python Seam S1/S2/S4 + Z3 Formal SMT Proofs..."
-python3 -m pytest -q tests/test_seam_s1_clearing.py tests/test_seam_s2_eip712_and_differential.py tests/test_seam_s4_archcheck.py
+ruff check .
+mypy tools tests
+STYLUSCLEAR_REQUIRE_CLI=1 python3 -m pytest -q tests/test_seam_s1_clearing.py tests/test_seam_s2_eip712_and_differential.py tests/test_seam_s4_archcheck.py
 python3 tools/formal/prove_invariants_z3.py --require-cli --examples 100
 
 echo "[check 6/7] TypeScript Strict Typecheck & Seam S3 Dual-Chain Workbench..."

@@ -1,4 +1,4 @@
-# StylusClear Dual-Track Deployment Architecture: Arbitrum Sepolia + Institutional Orbit L3 Appchain (v1.0.0)
+# StylusClear Dual-Track Deployment Architecture: Arbitrum Sepolia + Institutional Orbit L3 Appchain (v1.1.0)
 
 ## 1. Strategic Context: Navigating the October 2026 Stylus Pause & Constitutional AIP-31605
 
