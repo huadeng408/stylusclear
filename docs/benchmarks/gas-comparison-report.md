@@ -1,16 +1,16 @@
-# StylusClear v0.7.0 Empirical Gas & WASM Ink Benchmark Report
+# StylusClear v0.8.0 Empirical Gas & WASM Ink Benchmark Report
 
 * **Calibration Status**: `host_wasm_and_foundry_measured`
 * **Arbitrum Single-Block Gas Limit ([Chain Params](https://docs.arbitrum.io/arbitrum-essentials/reference/chain-params))**: `32,000,000` gas (`Stress` tier verified `< 32M` under cold storage `vm.cool()`)
-* **Stylus WASM Artifact (`artifacts/clearing_stylus.wasm`)**: `65,719 B` uncompressed / **`24,411 B` Brotli-q11** (`165 B` below legacy `24,576 B` cap; `73,893 B` below [`ArbOS 61`](https://docs.arbitrum.io/run-a-node/arbos-releases/arbos61) `96 KB` cap; `SHA-256`: `656c1a12389f55eb25f80fd795941b11272d8c50392f6d48ac5eb16ae5a76ad1`)
-* **Metering Model ([Stylus Gas & Ink](https://docs.arbitrum.io/stylus/concepts/gas-metering) / [HostIO Pricing](https://docs.arbitrum.io/stylus/reference/opcode-hostio-pricing))**: Empirical `wasmi` fuel execution of `artifacts/clearing_stylus.wasm` + exact HostIO storage/keccak/log charges (`10,000 ink = 1 EVM gas`) vs `forge test -vvvv` with `vm.cool()` cold-slot realism (`solc 0.8.38`, `via_ir = true`).
+* **Stylus WASM Artifact (`artifacts/clearing_stylus.wasm`)**: `65,341 B` uncompressed / **`24,527 B` Brotli-q11** (`49 B` below legacy `24,576 B` cap; `73,777 B` below [`ArbOS 61`](https://docs.arbitrum.io/run-a-node/arbos-releases/arbos61) `96 KB` cap; `SHA-256`: `d4fba5d6d4315fce83fef29c2c52e2897de22b0ed0b7d7449293b5f6a33bfc8a`)
+* **Metering Model ([Stylus Gas & Ink](https://docs.arbitrum.io/stylus/concepts/gas-metering) / [HostIO Pricing](https://docs.arbitrum.io/stylus/reference/opcode-hostio-pricing))**: Reproducible isomorphic Rust/WASM execution (`scripts/measure-wasm-benchmarks.py`, asserting `foundry_cycles == rust_cycles` across `2/9/33/45` cycles) + transparent ArbOS HostIO cold-storage/ecrecover pricing (offline pre-deployment proxy; live on-chain `eth_estimateGas` & `evm_ink_left()` recorded upon testnet deployment) (`10,000 ink = 1 EVM gas`) vs `forge test -vvvv` with `vm.cool()` cold-slot realism (`solc 0.8.38`, `via_ir = true`).
 
 | Tier | Desks | Obligations | Cycles Netted | Intents | Solidity Cold EVM Gas (`vm.cool()`) | Measured WASM Fuel (`wasmi`) | Total Stylus Ink | Stylus Total Gas (Compute + Cold Storage) | Net Gas Saved (`EVM / Stylus`) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `Small` | 4 | 5 | 2 | 4 | `459,596` | `7,671,048` | `1,267,430,000` | `126,743` | **72.4% (`3.63x`)** |
-| `Medium` | 12 | 20 | 3 | 24 | `2,417,504` | `25,018,897` | `4,220,800,000` | `422,080` | **82.5% (`5.73x`)** |
-| `Large` | 32 | 64 | 7 | 64 | `10,577,549` | `73,788,624` | `11,204,900,000` | `1,120,490` | **89.4% (`9.44x`)** |
-| `Stress` | 44 | 88 | 7 | 88 | `18,287,878` | `107,687,616` | `15,331,580,000` | `1,533,158` | **91.6% (`11.93x`)** |
+| `Small` | 4 | 5 | 2 | 4 | `459,676` | `5,406,000` | `1,727,160,000` | `172,716` | **62.4% (`2.66x`)** |
+| `Medium` | 12 | 20 | 9 | 24 | `2,417,984` | `23,486,000` | `5,256,540,000` | `525,654` | **78.3% (`4.60x`)** |
+| `Large` | 32 | 64 | 33 | 64 | `10,578,829` | `87,682,000` | `14,373,320,000` | `1,437,332` | **86.4% (`7.36x`)** |
+| `Stress` | 44 | 88 | 45 | 88 | `18,289,638` | `136,990,000` | `19,749,730,000` | `1,974,973` | **89.2% (`9.26x`)** |
 
 ## Methodology & Reproducibility
 1. **Zero Hardcoding & Strict `AND` Gate**: Both WASM binary metrics (`optimize-wasm-mvp.py` + `wasmi` fuel profiler) AND Foundry `ClearingBenchmarkGas` cold-slot traces (`forge test -vvvv`) must succeed simultaneously before `calibration_status` transitions to `host_wasm_and_foundry_measured`.

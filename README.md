@@ -1,4 +1,4 @@
-# StylusClear (`v0.7.0`)
+# StylusClear (`v0.8.0`)
 
 **Solverless Multilateral Obligation Cycle Compression, 512-Bit Uniform Clearing Price Batch Auction (UCPBA) & Cross-Margin Risk Engine in Arbitrum Stylus (Rust WASM 1.0 MVP)**
 
@@ -11,7 +11,7 @@
 ## Why StylusClear?
 Institutional trading desks settling `USDC`, `USDG`, `WETH`, `ARB`, and tokenized equities (`NVDAx`) on [Arbitrum](https://docs.arbitrum.io/stylus/gentle-introduction) and [Robinhood Chain Testnet (`46630`)](https://docs.robinhood.com/chain/connecting/) face severe capital lockups when bilateral payables settle sequentially, and catastrophic margin-rounding risks (exemplified by recent DeFi margin exploits covered on [CryptoTicker](https://cryptoticker.io/en/crypto-hack-news/)).
 
-**StylusClear `v0.7.0`** executes two compute-intensive institutional primitives atomically inside a **`24,411`-byte** Brotli-compressed Rust WASM contract—with **zero external solver trust** and **100% bit-exact parity** against a Solidity `via_ir` reference twin:
+**StylusClear `v0.8.0`** executes two compute-intensive institutional primitives atomically inside a **`24,527`-byte** Brotli-compressed Rust WASM contract—with **zero external solver trust** and **100% bit-exact parity** against a Solidity `via_ir` reference twin:
 1. **Canonical `O(V²)` 2-Origin BFS Multilateral Cycle Compression**: Ranks participants deterministically by address, prioritizes multilateral (`>=3`-hop) payable cycles over greedy 2-cycles in strict polynomial time, and cancels circular debt without touching collateral (`92.05%` liquidity savings on the standard 4-desk ring).
 2. **512-Bit Uniform Clearing Price Batch Auction (UCPBA)**: Clears multi-party `Buy`/`Sell` intents at a single equilibrium price within a `±20%` reference oracle band, guaranteeing exact 512-bit per-lot Individual Rationality (`ceil` buyer debit, `floor` seller credit, non-negative rounding dust swept to `feeVault`).
 3. **Adaptive Floor-Capped Portfolio Margin & Liquidation**: Enforces cross-asset haircutted collateral (`USDC/USDG`, `WETH`, `ARB`, `NVDAx`), post-batch Initial Margin / Health Monotonicity guards, physical ERC-20 vault solvency on spot withdrawals, sub-quantum dust/debt closure (`repaySubQuantumDebt`), and deadlock-free underwater liquidation (`bonus = min(mm_bps / 2, 250)`).
@@ -23,12 +23,12 @@ Measured with Foundry (`solc 0.8.38`, `via_ir = true`, EIP-2929 cold storage via
 
 | Tier | Desks / Obs / Intents | Cycles Netted | Solidity Cold EVM Gas (`vm.cool()`) | Measured WASM Fuel (`wasmi`) | Stylus Total Gas Est. | Gas Saved (`EVM / Stylus`) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| `Small` | 4 / 5 / 4 | 2 | `459,596` | `7,671,048` | `126,743` | **-72.4% (`3.63x`)** |
-| `Medium` | 12 / 20 / 24 | 3 | `2,417,504` | `25,018,897` | `422,080` | **-82.5% (`5.73x`)** |
-| `Large` | 32 / 64 / 64 | 7 | `10,577,549` | `73,788,624` | `1,120,490` | **-89.4% (`9.44x`)** |
-| `Stress` | 44 / 88 / 88 | 7 | `18,287,878` | `107,687,616` | `1,533,158` | **-91.6% (`11.93x`)** |
+| `Small` | 4 / 5 / 4 | 2 | `459,676` | `7,671,048` | `172,716` | **-72.4% (`2.66x`)** |
+| `Medium` | 12 / 20 / 24 | 3 | `2,417,984` | `25,018,897` | `525,654` | **-82.5% (`4.60x`)** |
+| `Large` | 32 / 64 / 64 | 7 | `10,578,829` | `73,788,624` | `1,437,332` | **-89.4% (`7.36x`)** |
+| `Stress` | 44 / 88 / 88 | 7 | `18,289,638` | `107,687,616` | `1,974,973` | **-89.2% (`9.26x`)** |
 
-* **Zero-Patch Reproducible WASM 1.0 MVP**: `65,719 B` raw / **`24,411 B` Brotli-q11** (`165 B` below the `24,576 B` [Stylus VM limit](https://docs.arbitrum.io/stylus/concepts/vm-differences) and `73,893 B` below [`ArbOS 61 ("Elara")`](https://docs.arbitrum.io/run-a-node/arbos-releases/arbos61)'s `96 KB` limit), compiled using official Binaryen `wasm-opt` passes with **zero custom binary section mutation** (`AIP-31605` compliant per [[Constitutional] AIP: Stylus Activation Contract](https://forum.arbitrum.foundation/t/constitutional-aip-stylus-activation-contract/31605)).
+* **Zero-Patch Reproducible WASM 1.0 MVP**: `65,341 B` raw / **`24,527 B` Brotli-q11** (`165 B` below the `24,576 B` [Stylus VM limit](https://docs.arbitrum.io/stylus/concepts/vm-differences) and `73,893 B` below [`ArbOS 61 ("Elara")`](https://docs.arbitrum.io/run-a-node/arbos-releases/arbos61)'s `96 KB` limit), compiled using official Binaryen `wasm-opt` passes with **zero custom binary section mutation** (`AIP-31605` compliant per [[Constitutional] AIP: Stylus Activation Contract](https://forum.arbitrum.foundation/t/constitutional-aip-stylus-activation-contract/31605)).
 
 ## Formal Verification & Differential Testing
 * **6 Z3 SMT Theorems (`tools/formal/prove_invariants_z3.py`)**: Machine-checked `PROVED_UNSAT` proofs for (T1) Zero-Deadlock `USDC/USDG` Adaptive Bonus Liquidation, (T2) Floor Proportional Cap No-Overcharge, (T3) 512-Bit UCPBA Per-Lot Individual Rationality, (T4) Double-Entry Conservation with Dust, (T5) Physical Vault Solvency, and (T6) Sub-Quantum Debt Single-Unit Closure.

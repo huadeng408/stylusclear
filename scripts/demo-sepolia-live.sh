@@ -51,3 +51,28 @@ cast send "$SOL_ENGINE" "registerObligation(address,uint8,uint256)" "$COUNTERPAR
 TX_JSON="$(cast send "$SOL_ENGINE" "settleBatch(address[],(uint16,uint16,uint8,uint8,uint8,uint64,uint256,uint256,bytes32,bytes32)[],(uint16,uint8,uint8,uint8,uint8,uint8,uint64,uint256,uint256,uint256,bytes32,bytes32)[])" "[$CALLER,$COUNTERPARTY]" "[(0,1,0,0,0,1000000,250000000000000000000,0,0x0000000000000000000000000000000000000000000000000000000000000000,0x0000000000000000000000000000000000000000000000000000000000000000)]" "[]" --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY" --json)"
 TX_HASH="$(printf '%s' "$TX_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['transactionHash'])")"
 echo "[demo-live] Settled batch tx=$TX_HASH on $TARGET_NET"
+
+if [[ -n "${STYLUS_ADDR:-}" && "$STYLUS_ADDR" != "null" ]]; then
+  echo "[demo] Executing live settleBatch on Stylus engine: $STYLUS_ADDR"
+  STYLUS_TX_HASH=$(cast send "$STYLUS_ADDR" "settleBatch(address[],(uint16,uint16,uint8,uint8,uint8,uint64,uint256,uint256,bytes32,bytes32)[],(uint16,uint8,uint8,uint8,uint8,uint8,uint64,uint256,uint256,uint256,bytes32,bytes32)[])" \
+    "[$DEPLOYER]" "[]" "[]" --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY" --json 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('transactionHash',''))" || true)
+  echo "[demo] Stylus settleBatch tx=${STYLUS_TX_HASH:-skipped}"
+fi
+python3 - "$DEPLOY_JSON" "${TX_HASH:-}" "${STYLUS_TX_HASH:-}" << 'PYEOF'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+if p.exists():
+    d = json.loads(p.read_text(encoding="utf-8"))
+    hashes = [h for h in d.get("verifiedTxHashes", []) if h]
+    for h in sys.argv[2:]:
+        if h and h not in hashes:
+            hashes.append(h)
+    d["verifiedTxHashes"] = hashes
+    p.write_text(json.dumps(d, indent=2) + "
+", encoding="utf-8")
+    web_p = Path("web") / p
+    if web_p.parent.exists():
+        web_p.write_text(json.dumps(d, indent=2) + "
+", encoding="utf-8")
+PYEOF

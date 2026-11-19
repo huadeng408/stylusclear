@@ -1,17 +1,38 @@
 [Script Info]
+Title: StylusClear v0.8.0 Demo Subtitles
 ScriptType: v4.00+
 PlayResX: 1920
 PlayResY: 1080
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Montserrat,42,&H00FFFFFF,&H0028D7FF,&H00080E1C,&H80000000,-1,0,0,0,100,100,0,0,1,2.5,1,2,80,80,48,1
+Style: Default,Montserrat,40,&H00F2F6FF,&H0000FFFF,&H00090E1A,&H90090E1A,-1,0,0,0,100,100,0,0,3,2,0,2,80,80,44,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,0:00:12.50,Default,,0,0,0,,Institutional market makers lock millions in fragmented bilateral collateral across Arbitrum & Robinhood Chain.
-Dialogue: 0,0:00:12.50,0:00:25.00,Default,,0,0,0,,StylusClear v0.7.0 collapses $13,200.00 circular debt to $1,050.00 in a 24,455 B Stylus WASM engine (92.05% saved).
-Dialogue: 0,0:00:25.00,0:00:48.00,Default,,0,0,0,,4-Asset Cross-Margin Workbench (USDC/USDG, WETH, ARB, NVDAx) · <5ms 64-Desk O(V²) 2-Origin BFS Netting.
-Dialogue: 0,0:00:48.00,0:01:10.00,Default,,0,0,0,,Fail-Closed Guards: LimitPriceViolated & InsufficientInitialMargin revert atomically with zero state mutation.
-Dialogue: 0,0:01:10.00,0:02:10.00,Default,,0,0,0,,AIP-31605 Reproducible WASM 1.0 MVP · Arbitrum Sepolia (421614) & Robinhood Chain Testnet (46630) Keyless Bridge.
-Dialogue: 0,0:02:10.00,0:02:45.00,Default,,0,0,0,,18x+ Cold-Storage Gas Advantage (<32M Cap) & 6/6 Z3 SMT Theorems PROVED UNSAT.
+Dialogue: 0,0:00:00.20,0:00:05.50,Default,,0,0,0,,Institutional DeFi desks hit EVM block gas\Nlimits under cold-storage clearing.
+Dialogue: 0,0:00:05.50,0:00:11.50,Default,,0,0,0,,Multilateral debt netting & batch auctions\Nquickly saturate standard EVM execution.
+Dialogue: 0,0:00:11.50,0:00:17.50,Default,,0,0,0,,StylusClear v0.8.0 solves this in no_std\NRust compiled for Arbitrum Stylus.
+Dialogue: 0,0:00:17.50,0:00:24.50,Default,,0,0,0,,Zero-patch WASM 1.0 MVP: 24,527 B Brotli-q11\N(below 24 KB legacy & 96 KB ArbOS 61 caps).
+Dialogue: 0,0:00:24.50,0:00:30.60,Default,,0,0,0,,Zero floating-point or post-MVP opcodes,\Nverified via Binaryen wasm-opt --mvp-features.
+Dialogue: 0,0:00:31.20,0:00:37.50,Default,,0,0,0,,Scenario 1 clears a 4-desk institutional ring:\N$13,200 gross compressed to $1,050 residual.
+Dialogue: 0,0:00:37.50,0:00:44.50,Default,,0,0,0,,92.05% settlement liquidity saved across 2\Nmultilateral cycles + 2.00 WETH @ $2,850.
+Dialogue: 0,0:00:44.50,0:00:51.50,Default,,0,0,0,,Scaling the canonical 2-Origin BFS mesh to\N24 and 64 desks runs in under 5 milliseconds.
+Dialogue: 0,0:00:51.50,0:00:58.50,Default,,0,0,0,,Scenario 2 triggers our fail-closed oracle\Nband guard: LimitPriceViolated.
+Dialogue: 0,0:00:58.50,0:01:05.50,Default,,0,0,0,,The entire batch rolls back atomically with\N0.00% compression and zero partial state.
+Dialogue: 0,0:01:05.50,0:01:13.50,Default,,0,0,0,,Scenario 4: Robinhood Chain Testnet (46630)\Nclearing USDG + tokenized equity NVDAx.
+Dialogue: 0,0:01:13.50,0:01:22.00,Default,,0,0,0,,$24,000 gross obligations compressed to\N$1,400 residual — 94.17% liquidity saved.
+Dialogue: 0,0:01:22.00,0:01:29.50,Default,,0,0,0,,Adaptive floor-capped liquidation protects\Nborrowers and guarantees vault solvency.
+Dialogue: 0,0:01:30.20,0:01:37.00,Default,,0,0,0,,Dual-chain ready: Arbitrum Sepolia (421614)\Nand Robinhood Chain Testnet (46630).
+Dialogue: 0,0:01:37.00,0:01:45.00,Default,,0,0,0,,Payable StylusAtomicFactory binds CREATE2\Nsalt to caller + admin to stop front-running.
+Dialogue: 0,0:01:45.00,0:01:53.00,Default,,0,0,0,,Detects 0xEFF000 Stylus bytecode, activates\Nvia ArbWasm (0x71), and initializes atomically.
+Dialogue: 0,0:01:53.00,0:02:01.00,Default,,0,0,0,,Strict ERC-20 balance-delta checks guard\Nevery deposit, withdraw, and debt repayment.
+Dialogue: 0,0:02:01.00,0:02:09.00,Default,,0,0,0,,Stylus storage cache flushes before every\Nexternal contract call for state safety.
+Dialogue: 0,0:02:09.00,0:02:18.00,Default,,0,0,0,,Keyless eth_call dual-VM parity verification\Nworks directly from workbench or CLI.
+Dialogue: 0,0:02:18.00,0:02:26.50,Default,,0,0,0,,Inspect live on-chain settlement receipts\Nand verified contracts on the block explorer.
+Dialogue: 0,0:02:27.20,0:02:35.00,Default,,0,0,0,,Strictly isomorphic benchmarks: 2, 9, 33, 45\Neliminated cycles on both Foundry & Rust.
+Dialogue: 0,0:02:35.00,0:02:43.50,Default,,0,0,0,,Stress tier drops from 18.29M cold EVM gas\Nto 1.97M Stylus gas: -89.2% (9.26x savings).
+Dialogue: 0,0:02:43.50,0:02:51.00,Default,,0,0,0,,Comfortably below Arbitrum's 32M single-block\Ngas cap under EIP-2929 vm.cool() cold slots.
+Dialogue: 0,0:02:51.00,0:02:59.50,Default,,0,0,0,,6/6 Z3 SMT theorems PROVED_UNSAT + 100/100\Nmatched-auction Hypothesis fuzz runs.
+Dialogue: 0,0:02:59.50,0:03:06.50,Default,,0,0,0,,Cross-checked against clearing-cli + 15/15\NFoundry, 8/8 Cargo, and 5/5 Pytest gates.
+Dialogue: 0,0:03:06.50,0:03:12.60,Default,,0,0,0,,StylusClear v0.8.0 — reproducible verification\Nin under 20 seconds via verify-judge-60s.sh.

@@ -1,6 +1,6 @@
 {
   "name": "stylusclear-workbench",
-  "version": "0.6.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "Deterministic clearing workbench and live Arbitrum Sepolia / Orbit / Robinhood Chain JSON-RPC adapter for StylusClear",

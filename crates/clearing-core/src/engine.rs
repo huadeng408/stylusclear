@@ -606,7 +606,11 @@ pub fn execute_raw_clearing_batch<V: SignatureVerifier>(
                 let norm_it = &normalized_intents[intent_pos];
                 let raw_it = &raw_intents[intent_pos];
                 let tr = usize::from(norm_it.trader);
-                if raw_it.auth_mode == 0 || cmp_u256(&fill_base, &norm_it.amount_wad).is_eq() {
+                let mut rem_after_fill = norm_it.amount_wad;
+                usub_assign(&mut rem_after_fill, &fill_base)?;
+                if raw_it.auth_mode == 0
+                    || cmp_u256(&rem_after_fill, &U256::from(MIN_INTENT_AMOUNT_U64)).is_lt()
+                {
                     consume_account_nonce(&mut work_bitmaps, norm_it.trader, &norm_it.nonce)?;
                 }
 

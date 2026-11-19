@@ -170,7 +170,7 @@ fn i256_from_be(w: &[u8; 32]) -> I256 {
     I256::from_be_bytes(*w)
 }
 
-#[inline]
+#[inline(never)]
 fn word_addr(a: Address) -> [u8; 32] {
     let mut w = [0u8; 32];
     put_slice(&mut w, 12, a.as_slice());
@@ -179,31 +179,25 @@ fn word_addr(a: Address) -> [u8; 32] {
 
 #[inline]
 fn word_u8(v: u8) -> [u8; 32] {
-    let mut w = [0u8; 32];
-    w[31] = v;
-    w
+    word_u64(u64::from(v))
 }
 
 #[inline]
 fn word_bool(v: bool) -> [u8; 32] {
-    word_u8(u8::from(v))
+    word_u64(u64::from(v))
 }
 
 #[inline]
 fn word_u16(v: u16) -> [u8; 32] {
-    let mut w = [0u8; 32];
-    put_slice(&mut w, 30, &v.to_be_bytes());
-    w
+    word_u64(u64::from(v))
 }
 
 #[inline]
 fn word_u32(v: u32) -> [u8; 32] {
-    let mut w = [0u8; 32];
-    put_slice(&mut w, 28, &v.to_be_bytes());
-    w
+    word_u64(u64::from(v))
 }
 
-#[inline]
+#[inline(never)]
 fn word_u64(v: u64) -> [u8; 32] {
     let mut w = [0u8; 32];
     put_slice(&mut w, 24, &v.to_be_bytes());
@@ -462,23 +456,33 @@ impl StylusClearingEngine {
     }
 
     #[inline(never)]
+    fn get_u256_u8(&self, ns: u8, asset_id: u8) -> U256 {
+        u256_from_be(&self.sload(&Self::key_tag_u8_u8(ns, asset_id, 0)))
+    }
+
+    #[inline(never)]
+    fn set_u256_u8(&mut self, ns: u8, asset_id: u8, val: &U256) {
+        self.sstore(&Self::key_tag_u8_u8(ns, asset_id, 0), &u256_be(val));
+    }
+
+    #[inline]
     fn get_fee(&self, asset_id: u8) -> U256 {
-        u256_from_be(&self.sload(&Self::key_tag_u8_u8(NS_FEES, asset_id, 0)))
+        self.get_u256_u8(NS_FEES, asset_id)
     }
 
-    #[inline(never)]
+    #[inline]
     fn set_fee(&mut self, asset_id: u8, val: &U256) {
-        self.sstore(&Self::key_tag_u8_u8(NS_FEES, asset_id, 0), &u256_be(val));
+        self.set_u256_u8(NS_FEES, asset_id, val);
     }
 
-    #[inline(never)]
+    #[inline]
     fn get_vault_raw(&self, asset_id: u8) -> U256 {
-        u256_from_be(&self.sload(&Self::key_tag_u8_u8(NS_VAULT_RAW, asset_id, 0)))
+        self.get_u256_u8(NS_VAULT_RAW, asset_id)
     }
 
-    #[inline(never)]
+    #[inline]
     fn set_vault_raw(&mut self, asset_id: u8, val: &U256) {
-        self.sstore(&Self::key_tag_u8_u8(NS_VAULT_RAW, asset_id, 0), &u256_be(val));
+        self.set_u256_u8(NS_VAULT_RAW, asset_id, val);
     }
 
     #[inline(never)]
@@ -491,23 +495,33 @@ impl StylusClearingEngine {
     }
 
     #[inline(never)]
+    fn get_addr_u256(&self, ns: u8, trader: Address, k: &U256) -> U256 {
+        u256_from_be(&self.sload(&self.addr_u256_slot(ns, trader, k)))
+    }
+
+    #[inline(never)]
+    fn set_addr_u256(&mut self, ns: u8, trader: Address, k: &U256, val: &U256) {
+        self.sstore(&self.addr_u256_slot(ns, trader, k), &u256_be(val));
+    }
+
+    #[inline]
     fn get_nonce_word(&self, trader: Address, word_pos: &U256) -> U256 {
-        u256_from_be(&self.sload(&self.addr_u256_slot(NS_NONCES, trader, word_pos)))
+        self.get_addr_u256(NS_NONCES, trader, word_pos)
     }
 
-    #[inline(never)]
+    #[inline]
     fn set_nonce_word(&mut self, trader: Address, word_pos: &U256, val: &U256) {
-        self.sstore(&self.addr_u256_slot(NS_NONCES, trader, word_pos), &u256_be(val));
+        self.set_addr_u256(NS_NONCES, trader, word_pos, val);
     }
 
-    #[inline(never)]
+    #[inline]
     fn get_partial_fill(&self, trader: Address, nonce: &U256) -> U256 {
-        u256_from_be(&self.sload(&self.addr_u256_slot(NS_PARTIAL_FILLS, trader, nonce)))
+        self.get_addr_u256(NS_PARTIAL_FILLS, trader, nonce)
     }
 
-    #[inline(never)]
+    #[inline]
     fn set_partial_fill(&mut self, trader: Address, nonce: &U256, val: &U256) {
-        self.sstore(&self.addr_u256_slot(NS_PARTIAL_FILLS, trader, nonce), &u256_be(val));
+        self.set_addr_u256(NS_PARTIAL_FILLS, trader, nonce, val);
     }
 
     #[inline(never)]
@@ -699,6 +713,7 @@ impl StylusClearingEngine {
             if existing.token != token || existing.cfg.decimals != decimals {
                 return Err(ClearingError::InvalidAssetConfig);
             }
+            Self::check_mark_step(&existing.cfg.mark_price_wad, mark_price_wad)?;
         } else if !token.is_zero() {
             for p in 0..cur_count {
                 if self.read_asset(p).token == token {
@@ -727,23 +742,28 @@ impl StylusClearingEngine {
     }
 
     #[inline(never)]
+    fn check_mark_step(prev: &U256, next: &U256) -> Result<(), ClearingError> {
+        let mut diff = U256::ZERO;
+        abs_diff_ref(next, prev, &mut diff);
+        if gt_mul_512_ref(
+            &diff,
+            &U256::from(BPS_DENOM_U64),
+            prev,
+            &U256::from(MAX_MARK_STEP_BPS),
+        ) {
+            return Err(ClearingError::InvalidAssetConfig);
+        }
+        Ok(())
+    }
+
+    #[inline(never)]
     fn update_mark_impl(&mut self, asset_id: u8, mark_price_wad: &U256) -> Result<(), ClearingError> {
         let (_, _, _, cur_count, _) = self.require_admin()?;
         if asset_id >= cur_count || mark_price_wad.is_zero() {
             return Err(ClearingError::InvalidAssetConfig);
         }
         let mut rec = self.read_asset(asset_id);
-        // 50% single-step oracle circuit breaker (`D-32`)
-        let mut diff = U256::ZERO;
-        abs_diff_ref(mark_price_wad, &rec.cfg.mark_price_wad, &mut diff);
-        if gt_mul_512_ref(
-            &diff,
-            &U256::from(BPS_DENOM_U64),
-            &rec.cfg.mark_price_wad,
-            &U256::from(MAX_MARK_STEP_BPS),
-        ) {
-            return Err(ClearingError::InvalidAssetConfig);
-        }
+        Self::check_mark_step(&rec.cfg.mark_price_wad, mark_price_wad)?;
         rec.cfg.mark_price_wad = *mark_price_wad;
         rec.cfg.price_updated_at = self.vm().block_timestamp();
         self.write_asset(&rec);
@@ -778,6 +798,22 @@ impl StylusClearingEngine {
     }
 
     #[inline(never)]
+    fn transfer_from_checked(&mut self, token: Address, from: Address, raw_amount: &U256) -> Result<U256, ClearingError> {
+        let this_addr = self.vm().contract_address();
+        let pre_bal = self.query_erc20_balance(token, this_addr);
+        self.call_erc20_xfer(token, Some(from), this_addr, raw_amount)?;
+        let (Some(pre_b), Some(post_b)) = (pre_bal, self.query_erc20_balance(token, this_addr)) else {
+            return Err(ClearingError::InvalidAssetConfig);
+        };
+        if cmp_u256(&post_b, &pre_b).is_le() {
+            return Err(ClearingError::InvalidAssetConfig);
+        }
+        let mut diff = post_b;
+        usub_assign(&mut diff, &pre_b)?;
+        Ok(diff)
+    }
+
+    #[inline(never)]
     fn deposit_impl(&mut self, asset_id: u8, raw_amount: &U256, out: &mut I256) -> Result<(), ClearingError> {
         self.check_non_reentrant()?;
         let (_, _, _, cur_count, _) = self.read_header();
@@ -786,23 +822,7 @@ impl StylusClearingEngine {
         }
         let rec = self.read_asset(asset_id);
         let sender = self.vm().msg_sender();
-        let this_addr = self.vm().contract_address();
-        let pre_bal = self.query_erc20_balance(rec.token, this_addr);
-
-        self.call_erc20_xfer(rec.token, Some(sender), this_addr, raw_amount)?;
-
-        let received_raw = if let (Some(pre_b), Some(post_b)) =
-            (pre_bal, self.query_erc20_balance(rec.token, this_addr))
-        {
-            if cmp_u256(&post_b, &pre_b).is_le() {
-                return Err(ClearingError::InvalidAssetConfig);
-            }
-            let mut diff = post_b;
-            usub_assign(&mut diff, &pre_b)?;
-            diff
-        } else {
-            *raw_amount
-        };
+        let received_raw = self.transfer_from_checked(rec.token, sender, raw_amount)?;
 
         let mut wad_u = U256::ZERO;
         scale_raw_to_wad_ref(&received_raw, rec.cfg.decimals, &mut wad_u)?;
@@ -849,10 +869,11 @@ impl StylusClearingEngine {
         if cmp_u256(&v_raw, raw_amount).is_lt() {
             return Err(ClearingError::InsufficientWithdrawableBalance);
         }
-        if let Some(live_b) = self.query_erc20_balance(rec.token, self.vm().contract_address()) {
-            if cmp_u256(&live_b, raw_amount).is_lt() {
-                return Err(ClearingError::InsufficientWithdrawableBalance);
-            }
+        let Some(live_b) = self.query_erc20_balance(rec.token, self.vm().contract_address()) else {
+            return Err(ClearingError::InsufficientWithdrawableBalance);
+        };
+        if cmp_u256(&live_b, raw_amount).is_lt() {
+            return Err(ClearingError::InsufficientWithdrawableBalance);
         }
 
         isub_assign(&mut next, &wad_delta)?;
@@ -892,15 +913,16 @@ impl StylusClearingEngine {
         }
 
         let one_raw = U256::from(1u64);
-        let this_addr = self.vm().contract_address();
-        self.call_erc20_xfer(rec.token, Some(sender), this_addr, &one_raw)?;
+        let received_raw = self.transfer_from_checked(rec.token, sender, &one_raw)?;
 
+        let mut add_wad = U256::ZERO;
+        umul_ref(&received_raw, &quantum_wad, &mut add_wad)?;
         let mut q_i = I256::ZERO;
-        u2i_ref(&quantum_wad, &mut q_i)?;
+        u2i_ref(&add_wad, &mut q_i)?;
         let mut next = cur;
         iadd_assign(&mut next, &q_i)?;
         let mut v_raw = self.get_vault_raw(asset_id);
-        uadd_assign(&mut v_raw, &one_raw)?;
+        uadd_assign(&mut v_raw, &received_raw)?;
 
         self.set_bal(sender, asset_id, &next);
         self.set_vault_raw(asset_id, &v_raw);
@@ -954,6 +976,7 @@ impl StylusClearingEngine {
                 return Err(ClearingError::InsufficientWithdrawableBalance);
             }
             isub_assign(&mut a_bal, &rem_i)?;
+            self.check_post_withdrawal_margin(admin, n_assets, debt_asset, &a_bal, true)?;
             self.set_bal(admin, debt_asset, &a_bal);
         } else {
             return Err(ClearingError::InsufficientWithdrawableBalance);
@@ -1388,7 +1411,14 @@ impl StylusClearingEngine {
                 let prev = prior_fills[idx];
                 let mut cum = prev;
                 uadd_assign(&mut cum, &fill.filled_base_wad)?;
-                if cmp_u256(&cum, &dto.signed_amount_wad).is_ge() {
+                let mut rem_signed = dto.signed_amount_wad;
+                let done = if cmp_u256(&cum, &dto.signed_amount_wad).is_ge() {
+                    true
+                } else {
+                    usub_assign(&mut rem_signed, &cum)?;
+                    cmp_u256(&rem_signed, &U256::from(clearing_core::MIN_INTENT_AMOUNT_U64)).is_lt()
+                };
+                if done {
                     if !prev.is_zero() {
                         self.set_partial_fill(tr_addr, &dto.nonce, &U256::ZERO);
                     }
@@ -1676,8 +1706,13 @@ fn dispatch_words(
 
     match selector {
         SEL_INITIALIZE | SEL_CTOR_SNAKE | SEL_CTOR_CAMEL | SEL_CTOR_NOARG => {
-            let mut c = AbiCursor::new_exact(input, 64)?;
-            storage.ctor_impl(c.addr()?, c.bool()?)?;
+            if selector == SEL_CTOR_NOARG {
+                let _ = AbiCursor::new_exact(input, 0)?;
+                storage.ctor_impl(storage.vm().msg_sender(), false)?;
+            } else {
+                let mut c = AbiCursor::new_exact(input, 64)?;
+                storage.ctor_impl(c.addr()?, c.bool()?)?;
+            }
             Ok(0)
         }
         SEL_TRANSFER_ADMIN => {
@@ -2180,23 +2215,39 @@ mod tests {
         assert!(dispatch(configureAssetCall { assetId: 0, token: usdc, decimals: 6, markPriceWad: wad, haircutBps: 0, imBps: 500, mmBps: 250 }.abi_encode()).is_ok());
         assert!(dispatch(configureAssetCall { assetId: 1, token: Address::ZERO, decimals: 18, markPriceWad: U256::from(2_000u64) * wad, haircutBps: 500, imBps: 1000, mmBps: 500 }.abi_encode()).is_ok());
 
-        // Deposit 1000 USDC (`balanceOf` delta verified)
+        // Deposit 1000 USDC (`balanceOf` delta strictly enforced)
         let raw_dep = U256::from(1_000_000_000u64);
         let this_addr = vm.contract_address();
+        let mut bal_call = Vec::with_capacity(36);
+        bal_call.extend_from_slice(&SEL_ERC20_BALANCE_OF);
+        bal_call.extend_from_slice(&word_addr(this_addr));
+        vm.mock_static_call(usdc, bal_call.clone(), Ok(u256_be(&raw_dep).to_vec()));
         vm.mock_call(usdc, transferFromCall { from: trader, to: this_addr, value: raw_dep }.abi_encode(), U256::ZERO, Ok(bool_true.to_vec()));
+        // Without balance delta (post == pre), deposit MUST revert InvalidAssetConfig (FoT protection)
         vm.set_sender(trader);
-        assert!(dispatch(depositCall { assetId: 0, rawAmount: raw_dep }.abi_encode()).is_ok());
+        assert_eq!(
+            dispatch(depositCall { assetId: 0, rawAmount: raw_dep }.abi_encode()),
+            Err(InvalidAssetConfig {}.abi_encode())
+        );
 
-        // Add sub-quantum positive dust + WETH debt, advance clock -> sweepDustToFeeVault MUST enforce StaleMarkPrice (`D-20`)
+        // Configure virtual asset 2 for sub-quantum dust sweep staleness check (`D-20`)
         vm.set_sender(admin);
+        assert!(dispatch(configureAssetCall { assetId: 2, token: Address::ZERO, decimals: 6, markPriceWad: wad, haircutBps: 0, imBps: 500, mmBps: 250 }.abi_encode()).is_ok());
+        // P1-2: configureAsset MUST enforce 50% mark price step breaker on already-initialized asset
+        assert_eq!(
+            dispatch(configureAssetCall { assetId: 2, token: Address::ZERO, decimals: 6, markPriceWad: U256::from(3u64) * wad, haircutBps: 0, imBps: 500, mmBps: 250 }.abi_encode()),
+            Err(InvalidAssetConfig {}.abi_encode())
+        );
+        assert!(dispatch(seedAccountBalanceCall { trader, assetId: 2, balanceWad: I256::try_from(500_000_000_000i64).unwrap() }.abi_encode()).is_ok());
         assert!(dispatch(seedAccountBalanceCall { trader, assetId: 1, balanceWad: -iwad }.abi_encode()).is_ok());
-        // Give trader 1000.0000005 USDC via virtual asset test? Asset 0 has token, so test stale withdraw first:
         vm.set_block_timestamp(10_000);
         vm.set_sender(trader);
         assert_eq!(
-            dispatch(withdrawCall { assetId: 0, rawAmount: U256::from(1_000_000u64) }.abi_encode()),
+            dispatch(sweepDustToFeeVaultCall { assetId: 2 }.abi_encode()),
             Err(StaleMarkPrice {}.abi_encode())
         );
+        // Reset clock for absorbBadDebt check
+        vm.set_block_timestamp(100);
 
         // Clear WETH debt and test absorbBadDebt (`D-16`) on a separate leaf account
         let leaf = Address::repeat_byte(0x55);

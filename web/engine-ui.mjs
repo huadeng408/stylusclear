@@ -11,74 +11,15 @@ export const BPS_DENOM = 10_000n;
 export const MIN_INTENT_AMOUNT_WAD = 10n ** 9n;
 export const LIQUIDATION_BONUS_CAP_BPS = 250n;
 
+import { MEASURED_BENCHMARKS } from "./benchmarks.generated.mjs";
+
 export const MEASURED_BENCHMARK_SUMMARY = {
-  schemaVersion: "0.7.0",
-  wasmRawBytes: 65719,
-  wasmBrotliBytes: 24411,
-  wasmSha256: "656c1a12389f55eb25f80fd795941b11272d8c50392f6d48ac5eb16ae5a76ad1",
-  arbitrumSingleBlockGasLimit: 32000000,
-  workloads: [
-  {
-    "tier": "Small",
-    "accounts": 4,
-    "obligations": 5,
-    "cycles_eliminated": 2,
-    "intents": 4,
-    "solidity_evm_gas": 459596,
-    "wasm_instructions": 7845862,
-    "hostio_calls": 218,
-    "stylus_ink": 1267780000,
-    "stylus_compute_gas": 7678,
-    "stylus_total_gas_est": 126778,
-    "gas_reduction_pct": 72.42,
-    "speedup_x": 3.63
-  },
-  {
-    "tier": "Medium",
-    "accounts": 12,
-    "obligations": 20,
-    "cycles_eliminated": 3,
-    "intents": 24,
-    "solidity_evm_gas": 2417504,
-    "wasm_instructions": 25550259,
-    "hostio_calls": 680,
-    "stylus_ink": 4221870000,
-    "stylus_compute_gas": 21587,
-    "stylus_total_gas_est": 422187,
-    "gas_reduction_pct": 82.54,
-    "speedup_x": 5.73
-  },
-  {
-    "tier": "Large",
-    "accounts": 32,
-    "obligations": 64,
-    "cycles_eliminated": 7,
-    "intents": 64,
-    "solidity_evm_gas": 10577549,
-    "wasm_instructions": 75128160,
-    "hostio_calls": 1804,
-    "stylus_ink": 11207580000,
-    "stylus_compute_gas": 56558,
-    "stylus_total_gas_est": 1120758,
-    "gas_reduction_pct": 89.4,
-    "speedup_x": 9.44
-  },
-  {
-    "tier": "Stress",
-    "accounts": 44,
-    "obligations": 88,
-    "cycles_eliminated": 7,
-    "intents": 88,
-    "solidity_evm_gas": 18287878,
-    "wasm_instructions": 109511112,
-    "hostio_calls": 2464,
-    "stylus_ink": 15335230000,
-    "stylus_compute_gas": 78123,
-    "stylus_total_gas_est": 1533523,
-    "gas_reduction_pct": 91.61,
-    "speedup_x": 11.93
-  }
-],
+  schemaVersion: MEASURED_BENCHMARKS.schema_version,
+  wasmRawBytes: MEASURED_BENCHMARKS.wasm_binary.raw_bytes,
+  wasmBrotliBytes: MEASURED_BENCHMARKS.wasm_binary.brotli_q11_bytes,
+  wasmSha256: MEASURED_BENCHMARKS.wasm_binary.sha256,
+  arbitrumSingleBlockGasLimit: MEASURED_BENCHMARKS.arbitrum_single_block_gas_limit,
+  workloads: MEASURED_BENCHMARKS.workloads,
 };
 
 export const STANDARD_ASSETS = [
@@ -426,7 +367,6 @@ export function buildLiveScenarioPayloads(scenarioId, deploymentConfig) {
       obligations: [],
       intents: [
         { trader: 0, baseAsset: 1, quoteAsset: 0, side: 0, authMode: 0, v: 0, maxEpoch, amountWad: 1n * WAD, limitPriceWad: 3900n * WAD, nonce: nonceBase, r: ZERO_B32, s: ZERO_B32 },
-        { trader: 1, baseAsset: 1, quoteAsset: 0, side: 1, authMode: 0, v: 0, maxEpoch, amountWad: 1n * WAD, limitPriceWad: 3600n * WAD, nonce: nonceBase + 1n, r: ZERO_B32, s: ZERO_B32 },
       ],
     };
   }

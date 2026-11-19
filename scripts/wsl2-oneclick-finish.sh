@@ -42,7 +42,11 @@ if [[ -n "${PRIVATE_KEY:-}" ]]; then
 fi
 
 if [[ -f "docs/assets/video_kit/master_audio.wav" ]]; then
-  bash scripts/build-final-video.sh "${LIVE_CLIP_PATH:-}" "$ROOT_DIR/docs/assets/demo-final.mp4"
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+  echo "[ERROR] ffmpeg not found in PATH. Install ffmpeg or mount 视频制作所需实体/05_ffmpeg_latest_gpl." >&2
+  exit 1
+fi
+bash scripts/build-final-video.sh "${LIVE_CLIP_PATH:-}" "$ROOT_DIR/docs/assets/demo-final.mp4"
 fi
 
 echo "[wsl2-finish] Complete."

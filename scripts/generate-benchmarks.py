@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Empirical WASM + Foundry cold-storage (`vm.cool()`) benchmark parser & report generator (`v0.7.0`)."""
+"""Empirical WASM + Foundry cold-storage (`vm.cool()`) benchmark parser & report generator (`v0.8.0`)."""
 from __future__ import annotations
 
 import argparse
@@ -60,12 +60,12 @@ def render_markdown(data: dict) -> str:
             f"| `{w['stylus_total_gas_est']:,}` | **{w['gas_reduction_pct']:.1f}% (`{w['speedup_x']:.2f}x`)** |"
         )
     table = "\n".join(rows)
-    return f"""# StylusClear v0.7.0 Empirical Gas & WASM Ink Benchmark Report
+    return f"""# StylusClear v0.8.0 Empirical Gas & WASM Ink Benchmark Report
 
 * **Calibration Status**: `{data['calibration_status']}`
 * **Arbitrum Single-Block Gas Limit ([Chain Params](https://docs.arbitrum.io/arbitrum-essentials/reference/chain-params))**: `32,000,000` gas (`Stress` tier verified `< 32M` under cold storage `vm.cool()`)
 * **Stylus WASM Artifact (`artifacts/clearing_stylus.wasm`)**: `{wb['raw_bytes']:,} B` uncompressed / **`{wb['brotli_q11_bytes']:,} B` Brotli-q11** (`{24576 - wb['brotli_q11_bytes']} B` below legacy `24,576 B` cap; `{98304 - wb['brotli_q11_bytes']:,} B` below [`ArbOS 61`](https://docs.arbitrum.io/run-a-node/arbos-releases/arbos61) `96 KB` cap; `SHA-256`: `{wb['sha256']}`)
-* **Metering Model ([Stylus Gas & Ink](https://docs.arbitrum.io/stylus/concepts/gas-metering) / [HostIO Pricing](https://docs.arbitrum.io/stylus/reference/opcode-hostio-pricing))**: Empirical `wasmi` fuel execution of `artifacts/clearing_stylus.wasm` + exact HostIO storage/keccak/log charges (`10,000 ink = 1 EVM gas`) vs `forge test -vvvv` with `vm.cool()` cold-slot realism (`solc 0.8.38`, `via_ir = true`).
+* **Metering Model ([Stylus Gas & Ink](https://docs.arbitrum.io/stylus/concepts/gas-metering) / [HostIO Pricing](https://docs.arbitrum.io/stylus/reference/opcode-hostio-pricing))**: Reproducible isomorphic Rust/WASM execution (`scripts/measure-wasm-benchmarks.py`, asserting `foundry_cycles == rust_cycles` across `2/9/33/45` cycles) + transparent ArbOS HostIO cold-storage/ecrecover pricing (offline pre-deployment proxy; live on-chain `eth_estimateGas` & `evm_ink_left()` recorded upon testnet deployment) (`10,000 ink = 1 EVM gas`) vs `forge test -vvvv` with `vm.cool()` cold-slot realism (`solc 0.8.38`, `via_ir = true`).
 
 | Tier | Desks | Obligations | Cycles Netted | Intents | Solidity Cold EVM Gas (`vm.cool()`) | Measured WASM Fuel (`wasmi`) | Total Stylus Ink | Stylus Total Gas (Compute + Cold Storage) | Net Gas Saved (`EVM / Stylus`) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -150,7 +150,7 @@ def main() -> int:
         else "host_wasm_and_foundry_measured"
     )
     out = {
-        "schema_version": "0.7.0",
+        "schema_version": "0.8.0",
         "calibration_status": preserved_status,
         "arbitrum_single_block_gas_limit": 32_000_000,
         "wasm_binary": {
@@ -175,6 +175,12 @@ def main() -> int:
     }
     ARTIFACTS_JSON.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
     REPORT_MD.write_text(render_markdown(out), encoding="utf-8")
+    gen_mjs = ROOT / "web" / "benchmarks.generated.mjs"
+    gen_mjs.write_text(
+        "// Auto-generated single source of truth from scripts/generate-benchmarks.py — DO NOT EDIT BY HAND\n"
+        f"export const MEASURED_BENCHMARKS = {json.dumps(out, indent=2)};\n",
+        encoding="utf-8",
+    )
     print("[generate-benchmarks] Updated measured-gas-artifacts.json and gas-comparison-report.md")
     return 0
 

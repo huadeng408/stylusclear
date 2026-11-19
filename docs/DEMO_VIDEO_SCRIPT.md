@@ -1,4 +1,4 @@
-# StylusClear v0.7.0 — 2m45s (`165s`) Demo Video Script & Pre-Rendered Production Kit
+# StylusClear v0.8.0 — 2m45s (`193s`) Demo Video Script & Pre-Rendered Production Kit
 
 * **Resolution & Frame Rate**: `1920x1080` (`1080p60`), H.264 `yuv420p`, `-14 LUFS` EBU R128 broadcast audio with sidechain-ducked CC0 underscore
 * **Workbench Local URL**: `http://127.0.0.1:8080`
@@ -7,12 +7,12 @@
   * `seg2_workbench.mp4` (`00:25–01:10`, `45s`): 4-Asset Portfolio (`USDC/USDG`, `WETH`, `ARB`, `NVDAx`), `<5ms` 64-Desk O(V²) Mesh & Fail-Closed Guard
   * `seg3_bridge.mp4` (`01:10–01:35`, `25s`, auto-replaced or extended by `35s` live explorer clip via `scripts/build-final-video.sh`): Arbitrum Sepolia (`421614`) & Robinhood Chain Testnet (`46630`) Dual-Chain Bridge
   * `seg4_rigor.mp4` (`02:10–02:45`, `35s`): Cold-Storage `vm.cool()` EVM vs `wasmi` Fuel Benchmarks & 6 Z3 `UNSAT` Formal Proofs
-  * `master_audio.wav` (`165.0s`), `subtitles.srt`, `subtitles.ass`
+  * `master_audio.wav` (`193.0s`), `subtitles.srt`, `subtitles.ass`
 
 ## Full 4-Scene Voiceover Transcript (Exact Spoken Script)
 
 ### Scene 1 (`00:00–00:25`) — The Institutional Clearing Bottleneck
-Institutional market makers on Arbitrum and Robinhood Chain lock millions in fragmented collateral because bilateral payables settle one leg at a time. StylusClear v0.7.0 brings solverless multilateral cycle compression and a five-hundred-twelve-bit Uniform Clearing Price Batch Auction directly into a twenty-four-point-four kilobyte Arbitrum Stylus Rust WASM engine—collapsing thirteen thousand two hundred dollars of circular debt down to just one thousand fifty dollars of net transfer, a ninety-two percent liquidity savings in one atomic transaction.
+Institutional market makers on Arbitrum and Robinhood Chain lock millions in fragmented collateral because bilateral payables settle one leg at a time. StylusClear v0.8.0 brings solverless multilateral cycle compression and a five-hundred-twelve-bit Uniform Clearing Price Batch Auction directly into a twenty-four-point-four kilobyte Arbitrum Stylus Rust WASM engine—collapsing thirteen thousand two hundred dollars of circular debt down to just one thousand fifty dollars of net transfer, a ninety-two percent liquidity savings in one atomic transaction.
 
 ### Scene 2 (`00:25–01:10`) — Interactive 4-Asset Workbench & Fail-Closed Guards
 Inside the StylusClear Workbench on port eighty-eighty, operators inspect four cross-margined assets: six-decimal USDC and USDG stablecoins, WETH, ARB, and eighteen-decimal tokenized NVDAx equities. Our canonical two-origin breadth-first cycle finder scales smoothly to sixty-four institutional desks in under five milliseconds, always prioritizing multilateral rings over greedy bilateral pairs. When an adversarial order crosses outside the twenty percent oracle band—or breaches initial margin—StylusClear reverts fail-closed with LimitPriceViolated or InsufficientInitialMargin, mutating zero state.

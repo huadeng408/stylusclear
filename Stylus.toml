@@ -3,3 +3,4 @@
 [workspace.networks]
 arbitrum-sepolia = { endpoint = "https://sepolia-rollup.arbitrum.io/rpc" }
 orbit-local = { endpoint = "http://127.0.0.1:8547" }
+robinhood-testnet = { endpoint = "https://rpc.testnet.chain.robinhood.com" }

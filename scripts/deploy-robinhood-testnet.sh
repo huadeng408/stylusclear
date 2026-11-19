@@ -56,7 +56,7 @@ cast send "$SOL_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint1
 STYLUS_ENGINE=""
 if command -v cargo-stylus >/dev/null 2>&1 || cargo stylus --version >/dev/null 2>&1; then
   echo "[deploy] Deploying pre-optimized WASM ($WASM_FILE) via cargo stylus --wasm-file..."
-  STYLUS_OUT="$(cargo stylus deploy --endpoint "$RPC_URL" --private-key "$PRIVATE_KEY" --wasm-file "$WASM_FILE" --no-verify 2>&1 || true)"
+  STYLUS_OUT="$(cargo stylus deploy --endpoint "$RPC_URL" --private-key "$PRIVATE_KEY" --wasm-file "$WASM_FILE" --no-verify 2>&1)"
   STYLUS_ENGINE="$(printf '%s\n' "$STYLUS_OUT" | grep -Eo '0x[0-9a-fA-F]{40}' | head -n 1 || true)"
   if [[ -n "$STYLUS_ENGINE" ]]; then
     cast send "$STYLUS_ENGINE" "initialize(address,bool)" "$DEPLOYER_ADDR" false --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY" >/dev/null

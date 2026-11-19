@@ -60,6 +60,7 @@ def optimize_to_mvp(src: Path, dst: Path) -> dict:
         "--reorder-locals",
         "--strip-debug",
         "--strip-producers",
+        "--strip-target-features",
     ]
     subprocess.run(cmd, check=True)
     # Strict WASM 1.0 MVP validator pass (rejects any 0xC0..0xC4 sign-ext, 0xFC bulk-memory, 0xFD SIMD, float, or reftype)
@@ -74,13 +75,14 @@ def optimize_to_mvp(src: Path, dst: Path) -> dict:
 
     raw = dst.read_bytes()
     b_len = brotli_q11_size(raw)
-    if b_len >= 24_576:
-        raise RuntimeError(f"Brotli-q11 size {b_len} exceeds 24,576 B legacy Stylus limit")
+    if b_len + 4 >= 24_576:
+        raise RuntimeError(f"Brotli-q11 + 4B Stylus header ({b_len + 4} B) exceeds 24,576 B legacy Stylus limit")
     return {
         "wasm_path": str(dst),
         "wasm_raw_bytes": len(raw),
         "wasm_brotli_q11_bytes": b_len,
-        "legacy_24kb_headroom_bytes": 24_576 - b_len,
+        "wasm_brotli_with_header_bytes": b_len + 4,
+        "legacy_24kb_headroom_bytes": 24_576 - (b_len + 4),
         "arbos61_96kb_headroom_bytes": 98_304 - b_len,
         "wasm_sha256": hashlib.sha256(raw).hexdigest(),
         "zero_float_opcodes_verified": zero_float,

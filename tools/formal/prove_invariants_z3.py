@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Formal SMT invariant verification (Z3) + Hypothesis differential fuzzing for StylusClear v0.7.0."""
+"""Formal SMT invariant verification (Z3) + Hypothesis differential fuzzing for StylusClear v0.8.0."""
 from __future__ import annotations
 
 import json
@@ -58,10 +58,11 @@ def run_all_z3_proofs() -> list[dict]:
         s.add(mm_d >= 2, mm_d <= 10000)
         s.add(h_c == 0)  # USDC / USDG collateral with 0 haircut
         s.add(repay_val >= 10**9, repay_val <= 10**30)
-        # Seize value at worst-case exact ratio: seize_val <= repay_val * (10000 + bonus) / 10000
+        # Exact contract ceiling/floor arithmetic (`margin.rs`):
+        # seize_val <= floor(repay_val * (10000 + bonus) / 10000)
+        # mm_drop   >= ceil(repay_val * (10000 + mm_d) / 10000) >= floor(...)
         seize_val = (repay_val * (10000 + bonus)) / 10000
-        # Liability reduction in MM terms: mm_drop >= repay_val * (10000 + mm_d) / 10000
-        mm_drop = (repay_val * (10000 + mm_d)) / 10000
+        mm_drop = (repay_val * (10000 + mm_d) + 9999) / 10000
         eff_drop = (seize_val * (10000 - h_c)) / 10000
         delta_health = mm_drop - eff_drop
         s.add(delta_health <= 0)
@@ -87,15 +88,19 @@ def run_all_z3_proofs() -> list[dict]:
         max_quote = (avail_coll * 10000) / (10000 + bonus)
         back_repay = (max_quote * p_c) / p_d
         s.add(back_repay >= MIN_INTENT_AMOUNT_WAD)
-        # Prove borrower never pays more collateral value than back_repay * (1 + bonus/10000) + 2 rounding quanta
+        # Two-step floor back-calculation guarantees:
+        # (a) Liquidator statutory bonus is never under-collateralized: back_repay * p_d * (10000 + bonus) <= avail_coll * p_c * 10000
+        # (b) Borrower rounding loss is strictly bounded by at most 2 rounding quanta (1 quote quantum + 1 debt quantum):
+        #     avail_coll * p_c * 10000 < (back_repay + 1) * p_d * (10000 + bonus) + p_c * (10000 + bonus)
         lhs = back_repay * p_d * (10000 + bonus)
         rhs = avail_coll * p_c * 10000
-        s.add(lhs > rhs)
+        upper_bound = (back_repay + 1) * p_d * (10000 + bonus) + p_c * (10000 + bonus)
+        s.add(z3.Or(lhs > rhs, rhs >= upper_bound))
 
     results.append(
         prove_theorem(
             "T2_Floor_Proportional_Cap_Bound",
-            "When raw_seize > avail_coll, two-step floor back-calculation guarantees back_repay * p_d * (10000 + bonus) <= avail_coll * p_c * 10000 with zero borrower overcharge.",
+            "When raw_seize > avail_coll, two-step floor back-calculation guarantees back_repay * p_d * (10000 + bonus) <= avail_coll * p_c * 10000 AND strictly bounds borrower rounding loss to < 2 rounding quanta.",
             t2,
         )
     )
@@ -221,7 +226,45 @@ def run_all_z3_proofs() -> list[dict]:
 def run_hypothesis_differential_fuzz(cli_bin: Path | None) -> dict:
     cases_run = 0
 
-    @settings(max_examples=40, deadline=None)
+    # Pure-Python deterministic secp256k1 EIP-712 signer for counterparty Sell orders in Hypothesis fuzzing
+    _P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+    _N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+    _G = (0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
+          0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8)
+    def _pt_add(p1, p2):
+        if p1 is None: return p2
+        if p2 is None: return p1
+        x1, y1 = p1; x2, y2 = p2
+        if x1 == x2 and y1 != y2: return None
+        m = ((3 * x1 * x1) * pow(2 * y1, _P - 2, _P)) % _P if x1 == x2 else ((y2 - y1) * pow(x2 - x1, _P - 2, _P)) % _P
+        x3 = (m * m - x1 - x2) % _P
+        return (x3, (m * (x1 - x3) - y1) % _P)
+    def _pt_mul(k, pt=_G):
+        res, addend = None, pt
+        while k:
+            if k & 1: res = _pt_add(res, addend)
+            addend = _pt_add(addend, addend)
+            k >>= 1
+        return res
+    from tools.ref_sim.crypto_eip712 import compute_intent_digest, keccak256 as _k256
+    _seller_sk = 0x5E11E50000000000000000000000000000000000000000000000000000000001
+    _sx, _sy = _pt_mul(_seller_sk)
+    _seller_addr = "0x" + _k256(_sx.to_bytes(32, "big") + _sy.to_bytes(32, "big"))[-20:].hex()
+    def _sign_digest(digest: bytes, sk: int):
+        z = int.from_bytes(digest, "big")
+        k = (int.from_bytes(_k256(sk.to_bytes(32, "big") + digest), "big") % (_N - 1)) + 1
+        rx, ry = _pt_mul(k)
+        r = rx % _N
+        s_val = (pow(k, _N - 2, _N) * (z + r * sk)) % _N
+        v = 27 + (ry & 1)
+        if s_val > _N // 2:
+            s_val = _N - s_val
+            v = 55 - v
+        return v, "0x" + r.to_bytes(32, "big").hex(), "0x" + s_val.to_bytes(32, "big").hex()
+
+    matched_cases = 0
+
+    @settings(max_examples=100, deadline=None)
     @given(
         ob_ab=st.integers(min_value=10**18, max_value=500 * 10**18),
         ob_bc=st.integers(min_value=10**18, max_value=500 * 10**18),
@@ -230,18 +273,23 @@ def run_hypothesis_differential_fuzz(cli_bin: Path | None) -> dict:
         sell_amt=st.integers(min_value=10**16, max_value=5 * 10**18),
     )
     def prop_conservation_and_monotonicity(ob_ab: int, ob_bc: int, ob_ca: int, buy_amt: int, sell_amt: int) -> None:
-        nonlocal cases_run
+        nonlocal cases_run, matched_cases
         cases_run += 1
         a0 = "0x" + "11" * 20
-        a1 = "0x" + "22" * 20
+        a1 = _seller_addr
         a2 = "0x" + "33" * 20
+        vc = "0x" + "99" * 20
+        buy_q = (buy_amt // MIN_INTENT_AMOUNT_WAD) * MIN_INTENT_AMOUNT_WAD
+        sell_q = (sell_amt // MIN_INTENT_AMOUNT_WAD) * MIN_INTENT_AMOUNT_WAD
+        dig = compute_intent_digest(421614, vc, a1, 1, 0, 1, sell_q, 2450 * 10**18, 10, 2)
+        v_s, r_s, s_s = _sign_digest(dig, _seller_sk)
         payload = {
             "batch_epoch": 1,
             "block_timestamp": 1_700_000_100,
             "max_price_staleness": 3600,
             "max_price_deviation_bps": 2000,
             "chain_id": 421614,
-            "verifying_contract": "0x" + "99" * 20,
+            "verifying_contract": vc,
             "caller": a0,
             "assets": [
                 {"asset_id": 0, "decimals": 6, "mark_price_wad": 10**18, "price_updated_at": 1_700_000_050, "haircut_bps": 0, "im_bps": 500, "mm_bps": 250},
@@ -263,11 +311,14 @@ def run_hypothesis_differential_fuzz(cli_bin: Path | None) -> dict:
                 {"debtor": 2, "creditor": 0, "asset_id": 0, "amount_wad": ob_ca, "auth_mode": 0},
             ],
             "intents": [
-                {"trader": 0, "base_asset": 1, "quote_asset": 0, "side": 0, "amount_wad": buy_amt, "limit_price_wad": 2550 * 10**18, "max_epoch": 10, "nonce": 1, "auth_mode": 0},
+                {"trader": 0, "base_asset": 1, "quote_asset": 0, "side": 0, "amount_wad": buy_q, "limit_price_wad": 2550 * 10**18, "max_epoch": 10, "nonce": 1, "auth_mode": 0},
+                {"trader": 1, "base_asset": 1, "quote_asset": 0, "side": 1, "amount_wad": sell_q, "limit_price_wad": 2450 * 10**18, "max_epoch": 10, "nonce": 2, "auth_mode": 1, "v": v_s, "r": r_s, "s": s_s},
             ],
         }
         out = execute_batch_payload(payload)
         assert out["cycles_eliminated"] == 1
+        assert int(out["auctions"][0]["matched_volume_wad"]) > 0
+        matched_cases += 1
         for a_idx in (0, 1):
             pre_total = sum(int(acc["balances"][a_idx]) for acc in payload["accounts"])
             post_total = sum(int(acc["balances"][a_idx]) for acc in out["post_accounts"]) + int(out["fee_vault_deltas"][a_idx])
@@ -285,21 +336,25 @@ def run_hypothesis_differential_fuzz(cli_bin: Path | None) -> dict:
         assert int(cli_json["cycles_eliminated"]) == int(py_json["cycles_eliminated"])
         cli_verified = True
 
-    return {"hypothesis_examples": cases_run, "cli_replay_cross_checked": cli_verified}
+    return {"hypothesis_examples": cases_run,
+        "auction_matched_examples": matched_cases, "cli_replay_cross_checked": cli_verified}
 
 
 def main() -> int:
     t0 = time.perf_counter()
     proofs = run_all_z3_proofs()
+    import os as _os
+    _ctd = _os.environ.get("CARGO_TARGET_DIR")
     cli_candidates = [
+        *([Path(_ctd) / "release" / "clearing-cli", Path(_ctd) / "debug" / "clearing-cli"] if _ctd else []),
+        Path("/var/tmp/p5_opt/target/release/clearing-cli"),
         Path("/var/tmp/p5_target/release/clearing-cli"),
-        Path("/var/tmp/p5_target/debug/clearing-cli"),
         ROOT / "target" / "release" / "clearing-cli",
     ]
     cli_bin = next((p for p in cli_candidates if p.exists()), None)
     fuzz_summary = run_hypothesis_differential_fuzz(cli_bin)
     report = {
-        "schema_version": "0.7.0",
+        "schema_version": "0.8.0",
         "all_theorems_proved": True,
         "theorem_count": len(proofs),
         "total_elapsed_ms": round((time.perf_counter() - t0) * 1000.0, 2),

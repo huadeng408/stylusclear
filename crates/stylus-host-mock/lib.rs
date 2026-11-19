@@ -200,55 +200,50 @@ impl HostEnv {
     }
 
     #[inline(never)]
-    pub fn static_call(&self, to: Address, data: &[u8]) -> Option<Vec<u8>> {
+    fn raw_call(&self, to: Address, data: &[u8], is_static: bool) -> Option<Vec<u8>> {
         let mut ret_len: usize = 0;
         let status = unsafe {
-            wasm_ffi::static_call_contract(
-                to.as_slice().as_ptr(),
-                data.as_ptr(),
-                data.len(),
-                u64::MAX,
-                &mut ret_len as *mut usize,
-            )
+            wasm_ffi::storage_flush_cache(false);
+            if is_static {
+                wasm_ffi::static_call_contract(
+                    to.as_slice().as_ptr(),
+                    data.as_ptr(),
+                    data.len(),
+                    u64::MAX,
+                    &mut ret_len as *mut usize,
+                )
+            } else {
+                let zero_val = [0u8; 32];
+                wasm_ffi::call_contract(
+                    to.as_slice().as_ptr(),
+                    data.as_ptr(),
+                    data.len(),
+                    zero_val.as_ptr(),
+                    u64::MAX,
+                    &mut ret_len as *mut usize,
+                )
+            }
         };
+        if status != 0 {
+            return None;
+        }
         let mut ret = vec![0u8; ret_len];
         if ret_len > 0 {
             unsafe {
                 wasm_ffi::read_return_data(ret.as_mut_ptr(), 0, ret_len);
             }
         }
-        if status == 0 {
-            Some(ret)
-        } else {
-            None
-        }
+        Some(ret)
     }
 
-    #[inline(never)]
+    #[inline]
+    pub fn static_call(&self, to: Address, data: &[u8]) -> Option<Vec<u8>> {
+        self.raw_call(to, data, true)
+    }
+
+    #[inline]
     pub fn call_zero_value(&self, to: Address, data: &[u8]) -> Option<Vec<u8>> {
-        let zero_val = [0u8; 32];
-        let mut ret_len: usize = 0;
-        let status = unsafe {
-            wasm_ffi::call_contract(
-                to.as_slice().as_ptr(),
-                data.as_ptr(),
-                data.len(),
-                zero_val.as_ptr(),
-                u64::MAX,
-                &mut ret_len as *mut usize,
-            )
-        };
-        let mut ret = vec![0u8; ret_len];
-        if ret_len > 0 {
-            unsafe {
-                wasm_ffi::read_return_data(ret.as_mut_ptr(), 0, ret_len);
-            }
-        }
-        if status == 0 {
-            Some(ret)
-        } else {
-            None
-        }
+        self.raw_call(to, data, false)
     }
 
     #[inline(never)]

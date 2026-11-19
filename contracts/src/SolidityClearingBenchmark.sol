@@ -209,7 +209,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         return keccak256(abi.encode(EIP712_DOMAIN_TYPEHASH, NAME_HASH, VERSION_HASH, block.chainid, address(this)));
     }
 
-    function getAccountBalance(address trader, uint8 assetId) external view override returns (int256) {
+    function getAccountBalance(address trader, uint8 assetId) external view override checkUnlocked returns (int256) {
         if (assetId >= _assetCount) _rev(InvalidAssetConfig.selector);
         return _balances[trader][assetId];
     }
@@ -222,7 +222,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         return _feeVault[assetId];
     }
 
-    function getVaultPhysicalRaw(uint8 assetId) external view override returns (uint256) {
+    function getVaultPhysicalRaw(uint8 assetId) external view override checkUnlocked returns (uint256) {
         return _vaultPhysicalRaw[assetId];
     }
 
@@ -329,6 +329,11 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         AssetConfig storage existing = _assets[assetId];
         if (existing.initialized) {
             if (existing.token != token || existing.decimals != decimals) {
+                _rev(InvalidAssetConfig.selector);
+            }
+            uint256 prev = existing.markPriceWad;
+            uint256 diff = markPriceWad >= prev ? (markPriceWad - prev) : (prev - markPriceWad);
+            if (FullMath512.gtMul512(diff, BPS_DENOM, prev, MAX_MARK_STEP_BPS)) {
                 _rev(InvalidAssetConfig.selector);
             }
         } else if (token != address(0)) {
@@ -470,8 +475,11 @@ contract SolidityClearingBenchmark is ISettlementEngine {
             uint256 rem = absorbedWad - feeBal;
             _feeVault[debtAsset] = 0;
             int256 remI = FullMath512.toInt256(rem);
-            if (_balances[_admin][debtAsset] < remI) _rev(InsufficientWithdrawableBalance.selector);
-            _balances[_admin][debtAsset] -= remI;
+            int256 curAdminBal = _balances[_admin][debtAsset];
+            if (curAdminBal < remI) _rev(InsufficientWithdrawableBalance.selector);
+            int256 nextAdminBal = curAdminBal - remI;
+            _checkPostWithdrawalMargin(_admin, nAssets, debtAsset, nextAdminBal);
+            _balances[_admin][debtAsset] = nextAdminBal;
         } else {
             _rev(InsufficientWithdrawableBalance.selector);
         }
@@ -1376,7 +1384,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
                 address trAddr = participants[it.trader];
 
                 uint256 cum = FullMath512.checkedAddU256(it.priorFilledWad, f);
-                if (it.authMode == 0 || cum >= it.signedAmountWad) {
+                if (it.authMode == 0 || cum >= it.signedAmountWad || (it.signedAmountWad - cum) < MIN_INTENT_AMOUNT_WAD) {
                     _consumeNonce(trAddr, it.nonce);
                     if (it.priorFilledWad > 0) _partialFills[trAddr][it.nonce] = 0;
                 } else {
