@@ -1,0 +1,18 @@
+[package]
+name = "clearing-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "clearing-cli"
+path = "src/main.rs"
+
+[dependencies]
+clearing-core = { path = "../clearing-core", features = ["std"] }
+alloy-primitives = { workspace = true, features = ["std"] }
+k256 = { workspace = true, features = ["std"] }
+serde = { workspace = true, features = ["std"] }
+serde_json = { workspace = true }

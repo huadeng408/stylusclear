@@ -1,0 +1,33 @@
+[package]
+name = "clearing-stylus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "clearing-stylus-abi"
+path = "src/main.rs"
+required-features = ["export-abi"]
+
+[features]
+default = ["mini-alloc"]
+mini-alloc = []
+export-abi = ["clearing-core/std"]
+
+[dependencies]
+clearing-core = { path = "../clearing-core", default-features = false }
+stylus-host-mock = { path = "../stylus-host-mock", default-features = false }
+alloy-primitives = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+clearing-core = { path = "../clearing-core", features = ["std"] }
+alloy-primitives = { workspace = true, features = ["std", "tiny-keccak"] }
+alloy-sol-types = { workspace = true }
+k256 = { workspace = true, features = ["std"] }
+serde = { workspace = true, features = ["std"] }
+serde_json = { workspace = true }

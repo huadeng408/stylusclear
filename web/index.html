@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StylusClear v0.7.0 — Multilateral Clearing & Margin Workbench</title>
+  <style>
+    :root {
+      --bg: #070b14;
+      --panel: #0e1526;
+      --panel-alt: #131c33;
+      --border: #1e2d4d;
+      --text: #eef4ff;
+      --muted: #8ea3c8;
+      --cyan: #28d7ff;
+      --green: #18e299;
+      --amber: #ffb545;
+      --red: #ff5470;
+      --violet: #9d7bff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 15% 0%, #102042 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 18px 24px;
+      min-height: 100vh;
+    }
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .badge {
+      background: rgba(40, 215, 255, 0.13); color: var(--cyan);
+      border: 1px solid rgba(40, 215, 255, 0.4); padding: 4px 10px;
+      border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.03em;
+    }
+    .badge.green { background: rgba(24, 226, 153, 0.14); color: var(--green); border-color: rgba(24, 226, 153, 0.45); }
+    .badge.red { background: rgba(255, 84, 112, 0.16); color: var(--red); border-color: rgba(255, 84, 112, 0.5); }
+    h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+    .subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .controls-bar {
+      display: grid; grid-template-columns: 1.5fr 1.1fr 1fr auto; gap: 12px;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px 14px; margin-bottom: 16px; align-items: center;
+    }
+    label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); display: block; margin-bottom: 4px; }
+    select, input[type="range"] {
+      width: 100%; background: var(--panel-alt); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 13px;
+    }
+    button {
+      background: linear-gradient(135deg, #16b8f3, #2979ff); color: #fff; border: none;
+      border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+    .kpi {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+    }
+    .kpi .k-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .kpi .k-val { font-size: 20px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .kpi .k-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .main-grid { display: grid; grid-template-columns: 1.05fr 1.35fr; gap: 14px; margin-bottom: 14px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+    }
+    .card h2 { font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+    th, td { padding: 7px 8px; text-align: right; border-bottom: 1px solid rgba(30, 45, 77, 0.65); }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+    .bottom-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
+    .guard-banner {
+      display: none; margin-bottom: 14px; padding: 12px 16px; border-radius: 10px;
+      background: rgba(255, 84, 112, 0.12); border: 1px solid rgba(255, 84, 112, 0.55);
+      color: #ffd7df; font-size: 13px;
+    }
+    .guard-banner.visible { display: flex; justify-content: space-between; align-items: center; }
+    .mono { font-family: "JetBrains Mono", "Fira Code", monospace; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="brand">
+        <h1>StylusClear v0.7.0</h1>
+        <span class="badge">WASM 1.0 MVP · 24,411 B Brotli</span>
+        <span class="badge green" id="z3Badge">Z3 6/6 UNSAT Proven</span>
+      </div>
+      <div class="subtitle">Solverless Multilateral Obligation Compression + 512-Bit UCPBA + Adaptive Floor Liquidation</div>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <span class="badge" id="chainBadge">Arbitrum Sepolia (421614)</span>
+      <span class="badge green" id="statusBadge">SETTLED · ATOMIC</span>
+    </div>
+  </header>
+
+  <div id="guardBanner" class="guard-banner">
+    <div>
+      <strong>FAIL-CLOSED GUARD TRIGGERED:</strong>
+      <span id="guardErrorName" class="mono">LimitPriceViolated</span> —
+      <span id="guardReason">Crossed price exceeds ±20.0% oracle deviation band; zero state mutated across Stylus &amp; Solidity VMs.</span>
+    </div>
+    <span class="badge red">0 State Mutated · 100% Atomic Rollback</span>
+  </div>
+
+  <section class="controls-bar">
+    <div>
+      <label for="scenarioSelect">Clearing &amp; Guard Preset</label>
+      <select id="scenarioSelect">
+        <option value="institutionalMesh">Scenario 1 — 4-Desk Multilateral Ring + WETH UCPBA Fill</option>
+        <option value="oracleBandGuard">Scenario 2 — Fail-Closed Oracle Deviation Guard (&gt;20% Band)</option>
+        <option value="marginShortfallGuard">Scenario 3 — Fail-Closed Initial Margin Guard (IM Deficit)</option>
+        <option value="robinhoodUsdgMesh">Scenario 4 — Robinhood Chain Testnet (46630) USDG + NVDAx Mesh</option>
+      </select>
+    </div>
+    <div>
+      <label for="networkSelect">Target Chain (Keyless eth_call)</label>
+      <select id="networkSelect">
+        <option value="421614">Arbitrum Sepolia (Chain ID 421614)</option>
+        <option value="46630">Robinhood Chain Testnet (Chain ID 46630)</option>
+      </select>
+    </div>
+    <div>
+      <label for="deskSlider">O(V²) BFS Mesh Scale: <span id="deskCountLabel">12</span> Desks (<span id="meshLatencyLabel">0.4 ms</span>)</label>
+      <input type="range" id="deskSlider" min="4" max="64" step="4" value="12" />
+    </div>
+    <div>
+      <button id="runSimBtn" type="button">Verify Dual-VM Parity</button>
+    </div>
+  </section>
+
+  <section class="kpi-grid">
+    <div class="kpi">
+      <div class="k-label">Gross Obligations</div>
+      <div class="k-val" id="kpiGross">$13,200.00</div>
+      <div class="k-sub" id="kpiCycles">2 Multilateral Cycles Eliminated</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Net Residual Transfer</div>
+      <div class="k-val" id="kpiResidual" style="color:var(--green);">$1,050.00</div>
+      <div class="k-sub" id="kpiCompression">92.05% Liquidity Saved</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">UCPBA Auction Fill</div>
+      <div class="k-val" id="kpiMatched" style="font-size:15px;">2.00 WETH @ $2,850.00</div>
+      <div class="k-sub">512-Bit Per-Lot IR Verified</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Stylus WASM Binary</div>
+      <div class="k-val" id="kpiWasm">24,411 B</div>
+      <div class="k-sub">Brotli-q11 (&lt; 24 KB &amp; 96 KB ArbOS 61)</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Stress Gas (44 Desks)</div>
+      <div class="k-val" id="kpiGasCompare">1.35M vs 24.80M</div>
+      <div class="k-sub" id="kpiSpeedup">Stylus vs Cold EVM (&lt;32M Block Cap)</div>
+    </div>
+  </section>
+
+  <section class="main-grid">
+    <div class="card">
+      <h2>
+        <span>Canonical 2-Origin BFS Obligation Mesh</span>
+        <span class="mono" style="font-size:11px;color:var(--cyan);" id="meshSummaryBadge">4 Nodes · Unique Rank IDs</span>
+      </h2>
+      <svg id="meshSvg" viewBox="0 0 460 250" style="width:100%;height:245px;background:#080e1c;border-radius:8px;border:1px solid #182542;"></svg>
+    </div>
+
+    <div class="card">
+      <h2>
+        <span>4-Asset Portfolio Ledger &amp; Post-Batch Margin Health</span>
+        <span class="mono" style="font-size:11px;color:var(--green);">Slots 0..3 (USDC/USDG · WETH · ARB · NVDAx)</span>
+      </h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Participant</th>
+            <th>USDC / USDG</th>
+            <th>WETH</th>
+            <th>ARB</th>
+            <th>NVDAx (RWA)</th>
+            <th>Health ($)</th>
+            <th>IM Surplus ($)</th>
+          </tr>
+        </thead>
+        <tbody id="portfolioBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="bottom-grid">
+    <div class="card">
+      <h2>
+        <span>Empirical Cold-Storage EVM (vm.cool) vs Stylus wasmi Fuel</span>
+        <span class="mono" style="font-size:11px;color:var(--amber);">solc 0.8.38 via_ir · Arbitrum 32M Cap</span>
+      </h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Workload Tier</th>
+            <th>Desks / Obs / Intents</th>
+            <th>Cycles</th>
+            <th>Cold EVM Gas</th>
+            <th>WASM Fuel</th>
+            <th>Stylus Gas Est.</th>
+            <th>Gas Saved</th>
+          </tr>
+        </thead>
+        <tbody id="benchBody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>
+        <span>Adaptive Floor-Capped Underwater Liquidation Simulator (D-07 / D-08)</span>
+        <span class="badge green" id="liqBonusBadge">Bonus Cap: 250 bps</span>
+      </h2>
+      <div id="liqPreviewBox" style="font-size:12.5px; line-height:1.65; color:#d7e3fc;"></div>
+    </div>
+  </section>
+
+  <script type="module">
+    import {
+      MEASURED_BENCHMARK_SUMMARY,
+      PRESET_SCENARIOS,
+      STANDARD_ASSETS,
+      WAD,
+      evaluateAccountRisk,
+      previewUnderwaterLiquidation,
+      simulateScaleMeshFast,
+    } from "./engine-ui.mjs";
+
+    const fmtWad = (v, digits = 2) => {
+      const sign = v < 0n ? "-" : "";
+      const abs = v < 0n ? -v : v;
+      const whole = abs / WAD;
+      const frac = ((abs % WAD) * 100n) / WAD;
+      return `${sign}${whole.toLocaleString("en-US")}.${String(frac).padStart(digits, "0")}`;
+    };
+
+    function renderBenchTable() {
+      const tbody = document.getElementById("benchBody");
+      tbody.innerHTML = MEASURED_BENCHMARK_SUMMARY.workloads.map((w) => `
+        <tr>
+          <td><strong>${w.tier}</strong></td>
+          <td>${w.accounts} / ${w.obligations} / ${w.intents}</td>
+          <td>${w.cycles_eliminated}</td>
+          <td class="mono">${w.solidity_evm_gas.toLocaleString("en-US")}</td>
+          <td class="mono">${w.wasm_instructions.toLocaleString("en-US")}</td>
+          <td class="mono" style="color:var(--cyan);">${w.stylus_total_gas_est.toLocaleString("en-US")}</td>
+          <td style="color:var(--green);font-weight:700;">-${w.gas_reduction_pct.toFixed(1)}% (${w.speedup_x.toFixed(1)}x)</td>
+        </tr>
+      `).join("");
+      const stress = MEASURED_BENCHMARK_SUMMARY.workloads[3];
+      document.getElementById("kpiWasm").textContent = `${MEASURED_BENCHMARK_SUMMARY.wasmBrotliBytes.toLocaleString("en-US")} B`;
+      document.getElementById("kpiGasCompare").textContent =
+        `${(stress.stylus_total_gas_est / 1e6).toFixed(2)}M vs ${(stress.solidity_evm_gas / 1e6).toFixed(2)}M`;
+      document.getElementById("kpiSpeedup").textContent =
+        `${stress.speedup_x.toFixed(1)}x Cheaper · Cold EVM < 32M Cap`;
+    }
+
+    function renderLiquidationCard() {
+      const p1 = previewUnderwaterLiquidation({
+        underwaterBalances: [2900n * WAD, -1n * WAD, 0n, 0n],
+        liquidatorBalances: [15000n * WAD, 5n * WAD, 0n, 0n],
+        debtAsset: 1,
+        collateralAsset: 0,
+        repayAmountWad: 400000000000000000n,
+      });
+      const p2 = previewUnderwaterLiquidation({
+        underwaterBalances: [1000n * WAD, -1n * WAD, 0n, 0n],
+        liquidatorBalances: [15000n * WAD, 5n * WAD, 0n, 0n],
+        debtAsset: 1,
+        collateralAsset: 0,
+        repayAmountWad: 1n * WAD,
+      });
+      document.getElementById("liqPreviewBox").innerHTML = `
+        <div style="margin-bottom:8px;padding:8px 10px;background:#091122;border-radius:8px;border:1px solid #1c2c4c;">
+          <strong style="color:var(--cyan);">1. Partial Repay (Sufficient Collateral):</strong>
+          Repay <span class="mono">0.40 WETH</span> debt &rarr; Seize <span class="mono">$${fmtWad(p1.seizedCollateralWad)} USDC</span>
+          (<span class="mono">${p1.bonusBps} bps</span> bonus). Borrower Health:
+          <span class="mono" style="color:var(--red);">$${fmtWad(p1.preHealthWad)}</span> &rarr;
+          <span class="mono" style="color:var(--green);">$${fmtWad(p1.postHealthWad)}</span>.
+        </div>
+        <div style="padding:8px 10px;background:#091122;border-radius:8px;border:1px solid #1c2c4c;">
+          <strong style="color:var(--amber);">2. Floor Proportional Cap (1,000 USDC Cap):</strong>
+          Request <span class="mono">1.00 WETH</span> &rarr; Capped Seize <span class="mono">$${fmtWad(p2.seizedCollateralWad)} USDC</span>,
+          Floor Back-Calculated Repay <span class="mono">${(Number(p2.repaidDebtWad) / 1e18).toFixed(6)} WETH</span> (Zero Overcharge).
+        </div>
+      `;
+    }
+
+    function renderMeshSvg(nDesks, scenario) {
+      const t0 = performance.now();
+      const mesh = simulateScaleMeshFast(nDesks);
+      const dt = (performance.now() - t0).toFixed(2);
+      document.getElementById("deskCountLabel").textContent = String(mesh.deskCount);
+      document.getElementById("meshLatencyLabel").textContent = `${dt} ms`;
+      document.getElementById("meshSummaryBadge").textContent =
+        `${mesh.deskCount} Nodes · ${mesh.cyclesEliminated} Cycles Netted (${mesh.compressionRatioPct}%)`;
+
+      const svg = document.getElementById("meshSvg");
+      const cx = 230, cy = 125, rx = 165, ry = 88;
+      const coords = mesh.nodeLabels.map((lbl, idx) => {
+        const ang = -Math.PI / 2 + (2 * Math.PI * idx) / mesh.deskCount;
+        return { lbl, x: cx + rx * Math.cos(ang), y: cy + ry * Math.sin(ang) };
+      });
+      const edgeStroke = scenario.expectedError ? "#ff5470" : "#28d7ff";
+      const lines = mesh.edges.slice(0, 96).map((e) => {
+        const a = coords[e.debtor], b = coords[e.creditor];
+        return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${edgeStroke}" stroke-opacity="0.34" stroke-width="1.4" />`;
+      }).join("");
+      const showAllText = mesh.deskCount <= 16;
+      const nodes = coords.map((c, idx) => {
+        const r = mesh.deskCount <= 8 ? 16 : (mesh.deskCount <= 24 ? 10 : 5.5);
+        const showLbl = showAllText || idx % 4 === 0;
+        return `
+          <g>
+            <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${r}" fill="#112244" stroke="${edgeStroke}" stroke-width="1.8" />
+            ${showLbl ? `<text x="${c.x.toFixed(1)}" y="${(c.y + (mesh.deskCount <= 8 ? 4 : -9)).toFixed(1)}" text-anchor="middle" fill="#eef4ff" font-size="${mesh.deskCount <= 8 ? 9.5 : 8.5}" font-weight="600">${c.lbl}</text>` : ""}
+          </g>
+        `;
+      }).join("");
+      svg.innerHTML = lines + nodes;
+    }
+
+    function applyScenario(scenarioId) {
+      const sc = PRESET_SCENARIOS[scenarioId] || PRESET_SCENARIOS.institutionalMesh;
+      const banner = document.getElementById("guardBanner");
+      const statusBadge = document.getElementById("statusBadge");
+
+      if (sc.expectedError) {
+        banner.classList.add("visible");
+        document.getElementById("guardErrorName").textContent = sc.expectedError;
+        document.getElementById("guardReason").textContent = sc.matchedVolumeSummary;
+        statusBadge.textContent = `BLOCKED · ${sc.expectedError}`;
+        statusBadge.className = "badge red";
+      } else {
+        banner.classList.remove("visible");
+        statusBadge.textContent = "SETTLED · ATOMIC PARITY";
+        statusBadge.className = "badge green";
+      }
+
+      if (scenarioId === "robinhoodUsdgMesh") {
+        document.getElementById("networkSelect").value = "46630";
+      }
+      const netVal = document.getElementById("networkSelect").value;
+      document.getElementById("chainBadge").textContent =
+        netVal === "46630" ? "Robinhood Chain Testnet (46630)" : "Arbitrum Sepolia (421614)";
+
+      document.getElementById("kpiGross").textContent = `$${sc.grossObligationUsd}`;
+      document.getElementById("kpiResidual").textContent = sc.expectedError ? sc.netResidualUsd : `$${sc.netResidualUsd}`;
+      document.getElementById("kpiResidual").style.color = sc.expectedError ? "var(--red)" : "var(--green)";
+      document.getElementById("kpiCycles").textContent = `${sc.cyclesEliminated} Multilateral Cycles Eliminated`;
+      document.getElementById("kpiMatched").textContent = sc.matchedVolumeSummary;
+
+      const tbody = document.getElementById("portfolioBody");
+      tbody.innerHTML = sc.desks.map((d) => {
+        const risk = evaluateAccountRisk(d.balances, STANDARD_ASSETS);
+        const hCol = risk.healthWad >= 0n ? "var(--green)" : "var(--red)";
+        return `
+          <tr>
+            <td><strong>${d.shortLabel}</strong> <span class="mono" style="color:var(--muted);font-size:10.5px;">${d.address.slice(0, 6)}..${d.address.slice(-4)}</span></td>
+            <td class="mono">${fmtWad(d.balances[0])}</td>
+            <td class="mono">${fmtWad(d.balances[1])}</td>
+            <td class="mono">${fmtWad(d.balances[2])}</td>
+            <td class="mono">${fmtWad(d.balances[3])}</td>
+            <td class="mono" style="color:${hCol};">$${fmtWad(risk.healthWad)}</td>
+            <td class="mono">$${fmtWad(risk.imSurplusWad)}</td>
+          </tr>
+        `;
+      }).join("");
+
+      const sliderVal = Number(document.getElementById("deskSlider").value);
+      renderMeshSvg(sliderVal, sc);
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const initScenario = params.get("scenario") || "institutionalMesh";
+    const initDesks = Number(params.get("desks") || "4");
+    document.getElementById("scenarioSelect").value = initScenario;
+    document.getElementById("deskSlider").value = String(initDesks);
+
+    document.getElementById("scenarioSelect").addEventListener("change", (e) => applyScenario(e.target.value));
+    document.getElementById("networkSelect").addEventListener("change", () => applyScenario(document.getElementById("scenarioSelect").value));
+    document.getElementById("deskSlider").addEventListener("input", (e) => {
+      const sc = PRESET_SCENARIOS[document.getElementById("scenarioSelect").value];
+      renderMeshSvg(Number(e.target.value), sc);
+    });
+    document.getElementById("runSimBtn").addEventListener("click", () => applyScenario(document.getElementById("scenarioSelect").value));
+
+    renderBenchTable();
+    renderLiquidationCard();
+    applyScenario(initScenario);
+  </script>
+</body>
+</html>

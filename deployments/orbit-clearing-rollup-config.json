@@ -1,0 +1,35 @@
+{
+  "chainId": 42161405,
+  "chainName": "StylusClear Institutional Clearing Orbit L3",
+  "parentChainId": 421614,
+  "parentChainName": "Arbitrum Sepolia",
+  "productionSettlementTarget": "Arbitrum One (42161) / Robinhood Chain (46630 -> 4663)",
+  "arbitrumMainnetGovernanceAlignment": {
+    "pauseNotice": "https://docs.arbitrum.io/notices/stylus-activation-pause-notice",
+    "pauseDate": "2026-10-02",
+    "constitutionalAip": "https://forum.arbitrum.foundation/t/constitutional-aip-stylus-activation-contract/31605",
+    "rationale": "Custom Orbit L3 chains maintain independent ArbOwner / ArbWasm governance for immediate Stylus WASM activation, while Arbitrum One/Nova transition to the AIP-31605 permissioned Stylus Activation Wrapper and Arbitrum Sepolia (421614) remains fully permissionless."
+  },
+  "stylusTargetConfig": {
+    "wasmActivationEnabled": true,
+    "wasm10StrictNoReferenceTypesNoSimd": true,
+    "maxWasmSizeBytes": 65536,
+    "maxUncompressedWasmSizeBytes": 262144,
+    "inkPriceRatio": 10000,
+    "uncachedInitMinGas": 8832,
+    "cachedInitMinGas": 352,
+    "programExpiryDays": 365,
+    "keepaliveRenewalIntervalDays": 31
+  },
+  "arbWasmCachePolicy": {
+    "arbWasmPrecompile": "0x0000000000000000000000000000000000000071",
+    "arbWasmCachePrecompile": "0x0000000000000000000000000000000000000072",
+    "pinClearingEngineInCache": true,
+    "recommendedCacheBidWei": "1000000000000000"
+  },
+  "sequencerBatchPolicy": {
+    "auctionEpochIntervalMs": 250,
+    "deterministicFirstComeBatchOrdering": true,
+    "benchmarkSeedingEnabled": false
+  }
+}

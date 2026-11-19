@@ -1,0 +1,31 @@
+1
+00:00:00,000 --> 00:00:12,500
+Institutional market makers on Arbitrum and Robinhood Chain lock millions in fragmented collateral because bilateral payables settle one leg at a time.
+
+2
+00:00:12,500 --> 00:00:25,000
+StylusClear v0.7.0 collapses $13,200.00 of circular debt down to $1,050.00 in a 24,455-byte Stylus Rust WASM engine — 92.05% liquidity saved atomically.
+
+3
+00:00:25,000 --> 00:00:48,000
+On port 8080, operators manage 4 cross-margined assets (USDC/USDG, WETH, ARB, NVDAx) while 2-origin BFS cycle netting scales to 64 desks in under 5 ms.
+
+4
+00:00:48,000 --> 00:01:10,000
+Adversarial out-of-band crosses or margin shortfalls revert fail-closed with LimitPriceViolated or InsufficientInitialMargin — mutating zero state.
+
+5
+00:01:10,000 --> 00:01:40,000
+Built with official Binaryen WASM 1.0 MVP passes (AIP-31605 & ArbOS 61 compliant) and atomic StylusAtomicFactory initialization.
+
+6
+00:01:40,000 --> 00:02:10,000
+Keyless eth_call and gas estimation bridge Arbitrum Sepolia (421614) and Robinhood Chain Testnet (46630) for USDG + NVDAx RWA settlement.
+
+7
+00:02:10,000 --> 00:02:28,000
+Under Foundry vm.cool() cold storage, 44-desk Stress consumes 24.80M EVM gas (< 32M block cap) while Stylus WASM cuts total gas by >18x.
+
+8
+00:02:28,000 --> 00:02:45,000
+Six Z3 SMT theorems prove zero stablecoin liquidation deadlocks, floor-cap safety, 512-bit UCPBA IR, conservation, and physical vault solvency.

@@ -1,0 +1,21 @@
+# Reproducible Arbitrum Stylus WASM 1.0 MVP Builder (AIP-31605 Compliant)
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl build-essential binaryen python3 python3-brotli \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0 --profile minimal \
+    && rustup target add wasm32-unknown-unknown
+
+WORKDIR /workspace
+COPY Cargo.toml Cargo.lock Stylus.toml rust-toolchain.toml ./
+COPY crates ./crates
+COPY scripts/optimize-wasm-mvp.py ./scripts/optimize-wasm-mvp.py
+
+RUN cargo build --locked --release --target wasm32-unknown-unknown -p clearing-stylus \
+    && python3 scripts/optimize-wasm-mvp.py target/wasm32-unknown-unknown/release/clearing_stylus.wasm artifacts/clearing_stylus.wasm --json

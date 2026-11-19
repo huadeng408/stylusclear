@@ -1,0 +1,29 @@
+name: StylusClear CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Binaryen & Python QA packages
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends binaryen shellcheck
+          python3 -m pip install --upgrade --break-system-packages pytest hypothesis z3-solver brotli eth-account eth-abi
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+      - uses: foundry-rs/foundry-toolchain@v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Web Dev Dependencies
+        working-directory: web
+        run: npm install --no-audit --no-fund
+      - name: Run Full 7-Gate Strict Check
+        run: bash scripts/check.sh --strict

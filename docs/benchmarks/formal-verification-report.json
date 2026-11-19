@@ -1,0 +1,54 @@
+{
+  "schema_version": "0.7.0",
+  "all_theorems_proved": true,
+  "theorem_count": 6,
+  "total_elapsed_ms": 357.1,
+  "theorems": [
+    {
+      "theorem": "T1_Adaptive_Bonus_Zero_USDC_Deadlock",
+      "description": "For any debt asset with mm_bps >= 2 and zero-haircut stablecoin collateral (USDC/USDG), bonus = min(mm_bps // 2, 250) strictly improves borrower health (delta_health > 0), eliminating the v0.6 250-bps deadlock.",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 51.47
+    },
+    {
+      "theorem": "T2_Floor_Proportional_Cap_Bound",
+      "description": "When raw_seize > avail_coll, two-step floor back-calculation guarantees back_repay * p_d * (10000 + bonus) <= avail_coll * p_c * 10000 with zero borrower overcharge.",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 19.64
+    },
+    {
+      "theorem": "T3_UCPBA_512Bit_Individual_Rationality_And_NonNegative_Dust",
+      "description": "Exact inductive proof for all N >= 1 lots: per-lot 512-bit IR eligibility guarantees multi-lot buyer ceil debit and seller floor credit satisfy limit prices with non-negative dust.",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 11.66
+    },
+    {
+      "theorem": "T4_Double_Entry_Conservation_With_Cycle_Netting_And_Dust",
+      "description": "Cycle compression plus residual settlement plus UCPBA quote transfers and rounding-dust sweep preserves exact integer conservation across all accounts.",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 6.65
+    },
+    {
+      "theorem": "T5_Spot_Backed_Withdrawal_Vault_Solvency",
+      "description": "Enforcing post-withdrawal balance >= 0 and rawAmount <= vaultPhysicalRaw preserves 100% physical ERC-20 backing for all remaining positive depositors.",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 5.85
+    },
+    {
+      "theorem": "T6_SubQuantum_Debt_Single_Unit_Closure",
+      "description": "Any negative sub-quantum balance (-quantum < bal < 0) on <18-decimal assets is strictly eliminated into (0, quantum) by depositing exactly 1 raw token unit via repaySubQuantumDebt.",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 5.76
+    }
+  ],
+  "property_fuzzing": {
+    "hypothesis_examples": 40,
+    "cli_replay_cross_checked": false
+  }
+}

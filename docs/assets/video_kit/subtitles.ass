@@ -1,0 +1,17 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Montserrat,42,&H00FFFFFF,&H0028D7FF,&H00080E1C,&H80000000,-1,0,0,0,100,100,0,0,1,2.5,1,2,80,80,48,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:12.50,Default,,0,0,0,,Institutional market makers lock millions in fragmented bilateral collateral across Arbitrum & Robinhood Chain.
+Dialogue: 0,0:00:12.50,0:00:25.00,Default,,0,0,0,,StylusClear v0.7.0 collapses $13,200.00 circular debt to $1,050.00 in a 24,455 B Stylus WASM engine (92.05% saved).
+Dialogue: 0,0:00:25.00,0:00:48.00,Default,,0,0,0,,4-Asset Cross-Margin Workbench (USDC/USDG, WETH, ARB, NVDAx) · <5ms 64-Desk O(V²) 2-Origin BFS Netting.
+Dialogue: 0,0:00:48.00,0:01:10.00,Default,,0,0,0,,Fail-Closed Guards: LimitPriceViolated & InsufficientInitialMargin revert atomically with zero state mutation.
+Dialogue: 0,0:01:10.00,0:02:10.00,Default,,0,0,0,,AIP-31605 Reproducible WASM 1.0 MVP · Arbitrum Sepolia (421614) & Robinhood Chain Testnet (46630) Keyless Bridge.
+Dialogue: 0,0:02:10.00,0:02:45.00,Default,,0,0,0,,18x+ Cold-Storage Gas Advantage (<32M Cap) & 6/6 Z3 SMT Theorems PROVED UNSAT.

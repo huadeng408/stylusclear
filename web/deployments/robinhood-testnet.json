@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "0.7.0",
+  "network": "robinhood-chain-testnet",
+  "chainId": 46630,
+  "rpcUrl": "https://rpc.testnet.chain.robinhood.com",
+  "explorerUrl": "https://explorer.testnet.chain.robinhood.com",
+  "wasmArtifact": "artifacts/clearing_stylus.wasm",
+  "atomicFactoryContract": null,
+  "stylusEngineAddress": null,
+  "solidityBenchmarkAddress": null,
+  "demoTraderA": "0x1111111111111111111111111111111111111111",
+  "demoTraderB": "0x2222222222222222222222222222222222222222",
+  "assets": {
+    "usdgMock6": null,
+    "wethMock18": null,
+    "arbMock18": null,
+    "nvdaxMock18": null
+  },
+  "verifiedTxHashes": []
+}

@@ -1,0 +1,477 @@
+[
+  {
+    "name": "golden_01_confirmed_and_eip712_cycle_ucpba_success",
+    "expect_ok": true,
+    "input": {
+      "batch_epoch": 42,
+      "block_timestamp": 1000,
+      "max_price_staleness": 3600,
+      "max_price_deviation_bps": 2000,
+      "chain_id": 421614,
+      "verifying_contract": "0x2222222222222222222222222222222222222222",
+      "caller": "0x9999000000000000000000000000000000000099",
+      "assets": [
+        {
+          "asset_id": 0,
+          "symbol": "USDC",
+          "decimals": 6,
+          "mark_price_wad": "1000000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 0,
+          "im_bps": 500,
+          "mm_bps": 250
+        },
+        {
+          "asset_id": 1,
+          "symbol": "WETH",
+          "decimals": 18,
+          "mark_price_wad": "2500000000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 500,
+          "im_bps": 1000,
+          "mm_bps": 500
+        },
+        {
+          "asset_id": 2,
+          "symbol": "ARB",
+          "decimals": 18,
+          "mark_price_wad": "1200000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 1500,
+          "im_bps": 1500,
+          "mm_bps": 800
+        }
+      ],
+      "accounts": [
+        {
+          "address": "0xef045a554cbb0016275e90e3002f4d21c6f263e1",
+          "balances": [
+            "6000000000000000000000",
+            "0",
+            "0"
+          ]
+        },
+        {
+          "address": "0xb6e610921b0a0f6f608c0e1f29a845552bc6db2c",
+          "balances": [
+            "0",
+            "3000000000000000000",
+            "0"
+          ]
+        },
+        {
+          "address": "0x9999000000000000000000000000000000000099",
+          "balances": [
+            "0",
+            "0",
+            "0"
+          ]
+        }
+      ],
+      "confirmed_obligations": {
+        "0:1:0": "800000000000000000000"
+      },
+      "obligations": [
+        {
+          "debtor": 0,
+          "creditor": 1,
+          "asset_id": 0,
+          "amount_wad": "800000000000000000000",
+          "auth": {
+            "mode": "LEDGER"
+          }
+        },
+        {
+          "debtor": 1,
+          "creditor": 2,
+          "asset_id": 0,
+          "amount_wad": "800000000000000000000",
+          "max_epoch": 100,
+          "nonce": "101",
+          "auth": {
+            "mode": "EIP712",
+            "v": 28,
+            "r": "0x74f1c4b3a336273ec2ea4198e754e2ea04bbf0c62d63027504a69f31ed120e68",
+            "s": "0x33cd77021a0542be8897574ced8892ad941408c98f35a293c340e4f97480a132"
+          }
+        },
+        {
+          "debtor": 2,
+          "creditor": 0,
+          "asset_id": 0,
+          "amount_wad": "800000000000000000000",
+          "max_epoch": 100,
+          "nonce": "202",
+          "auth": {
+            "mode": "DIRECT"
+          }
+        }
+      ],
+      "intents": [
+        {
+          "trader": 0,
+          "base_asset": 1,
+          "quote_asset": 0,
+          "side": "BUY",
+          "amount_wad": "2000000000000000000",
+          "limit_price_wad": "2510000000000000000000",
+          "max_epoch": 100,
+          "nonce": "787",
+          "auth": {
+            "mode": "EIP712",
+            "v": 27,
+            "r": "0x3a9988e00470043d71099b29d052a418f91e3a9db83a8f46f5c084b5a652bc90",
+            "s": "0x14fe1d7b08682caa077b79dd8fad81b1476a2948dd8a5ce5d22b6d2fc3c826f0"
+          }
+        },
+        {
+          "trader": 1,
+          "base_asset": 1,
+          "quote_asset": 0,
+          "side": "SELL",
+          "amount_wad": "2000000000000000000",
+          "limit_price_wad": "2490000000000000000000",
+          "max_epoch": 100,
+          "nonce": "7",
+          "auth": {
+            "mode": "EIP712",
+            "v": 28,
+            "r": "0x06c13199288d8e713e13fc94a772173e1599a08e6c9921ac060ebf6fa60430d8",
+            "s": "0x019df5c193e8e20e484cae310e6d3eb912ebe12aa16ef0a82eb9ae41a42f032d"
+          }
+        }
+      ],
+      "nonce_bitmaps": {}
+    },
+    "expected_receipt": {
+      "batch_epoch": 42,
+      "cycles_eliminated": 1,
+      "compressed_volume_by_asset": {
+        "0": "2400000000000000000000",
+        "1": "0",
+        "2": "0"
+      },
+      "residual_obligations": [],
+      "auctions": [
+        {
+          "base_asset": 1,
+          "quote_asset": 0,
+          "clearing_price_wad": "2500000000000000000000",
+          "matched_volume_wad": "2000000000000000000",
+          "rounding_dust_quote_wad": "0"
+        }
+      ],
+      "intent_fills": [
+        {
+          "intent_index": 0,
+          "filled_base_wad": "2000000000000000000",
+          "quote_transfer_wad": "5000000000000000000000"
+        },
+        {
+          "intent_index": 1,
+          "filled_base_wad": "2000000000000000000",
+          "quote_transfer_wad": "5000000000000000000000"
+        }
+      ],
+      "fee_vault_deltas": {
+        "0": "0",
+        "1": "0",
+        "2": "0"
+      },
+      "post_accounts": [
+        {
+          "address": "0xef045a554cbb0016275e90e3002f4d21c6f263e1",
+          "balances": [
+            "1000000000000000000000",
+            "2000000000000000000",
+            "0"
+          ],
+          "gross_collateral_wad": "6000000000000000000000",
+          "effective_collateral_wad": "5750000000000000000000",
+          "total_liability_wad": "0",
+          "required_im_wad": "0",
+          "required_mm_wad": "0",
+          "net_equity_wad": "6000000000000000000000",
+          "health_wad": "5750000000000000000000",
+          "im_surplus_wad": "5750000000000000000000"
+        },
+        {
+          "address": "0xb6e610921b0a0f6f608c0e1f29a845552bc6db2c",
+          "balances": [
+            "5000000000000000000000",
+            "1000000000000000000",
+            "0"
+          ],
+          "gross_collateral_wad": "7500000000000000000000",
+          "effective_collateral_wad": "7375000000000000000000",
+          "total_liability_wad": "0",
+          "required_im_wad": "0",
+          "required_mm_wad": "0",
+          "net_equity_wad": "7500000000000000000000",
+          "health_wad": "7375000000000000000000",
+          "im_surplus_wad": "7375000000000000000000"
+        },
+        {
+          "address": "0x9999000000000000000000000000000000000099",
+          "balances": [
+            "0",
+            "0",
+            "0"
+          ],
+          "gross_collateral_wad": "0",
+          "effective_collateral_wad": "0",
+          "total_liability_wad": "0",
+          "required_im_wad": "0",
+          "required_mm_wad": "0",
+          "net_equity_wad": "0",
+          "health_wad": "0",
+          "im_surplus_wad": "0"
+        }
+      ],
+      "confirmed_obligations": {
+        "0:1:0": "0"
+      },
+      "nonce_bitmaps": {
+        "0:3": "524288",
+        "1:0": "2535301200456458802993406410880",
+        "2:0": "6427752177035961102167848369364650410088811975131171341205504"
+      }
+    }
+  },
+  {
+    "name": "golden_02_f01_unsigned_obligation_drain_rejected",
+    "expect_ok": false,
+    "expected_error": "UnauthorizedObligation",
+    "input": {
+      "batch_epoch": 43,
+      "block_timestamp": 1000,
+      "max_price_staleness": 3600,
+      "max_price_deviation_bps": 2000,
+      "chain_id": 421614,
+      "verifying_contract": "0x2222222222222222222222222222222222222222",
+      "caller": "0x9999000000000000000000000000000000000099",
+      "assets": [
+        {
+          "asset_id": 0,
+          "symbol": "USDC",
+          "decimals": 6,
+          "mark_price_wad": "1000000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 0,
+          "im_bps": 500,
+          "mm_bps": 250
+        },
+        {
+          "asset_id": 1,
+          "symbol": "WETH",
+          "decimals": 18,
+          "mark_price_wad": "2500000000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 500,
+          "im_bps": 1000,
+          "mm_bps": 500
+        },
+        {
+          "asset_id": 2,
+          "symbol": "ARB",
+          "decimals": 18,
+          "mark_price_wad": "1200000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 1500,
+          "im_bps": 1500,
+          "mm_bps": 800
+        }
+      ],
+      "accounts": [
+        {
+          "address": "0xef045a554cbb0016275e90e3002f4d21c6f263e1",
+          "balances": [
+            "10000000000000000000000",
+            "4000000000000000000",
+            "0"
+          ]
+        },
+        {
+          "address": "0x9999000000000000000000000000000000000099",
+          "balances": [
+            "0",
+            "0",
+            "0"
+          ]
+        }
+      ],
+      "confirmed_obligations": {},
+      "obligations": [
+        {
+          "debtor": 0,
+          "creditor": 1,
+          "asset_id": 0,
+          "amount_wad": "19000000000000000000000",
+          "auth": {
+            "mode": "LEDGER"
+          }
+        }
+      ],
+      "intents": [],
+      "nonce_bitmaps": {}
+    }
+  },
+  {
+    "name": "golden_03_f02_insufficient_initial_margin_rollback",
+    "expect_ok": false,
+    "expected_error": "InsufficientInitialMargin",
+    "input": {
+      "batch_epoch": 44,
+      "block_timestamp": 1000,
+      "max_price_staleness": 3600,
+      "max_price_deviation_bps": 2000,
+      "chain_id": 421614,
+      "verifying_contract": "0x2222222222222222222222222222222222222222",
+      "caller": "0x9999000000000000000000000000000000000099",
+      "assets": [
+        {
+          "asset_id": 0,
+          "symbol": "USDC",
+          "decimals": 6,
+          "mark_price_wad": "1000000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 0,
+          "im_bps": 500,
+          "mm_bps": 250
+        },
+        {
+          "asset_id": 1,
+          "symbol": "WETH",
+          "decimals": 18,
+          "mark_price_wad": "2500000000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 500,
+          "im_bps": 1000,
+          "mm_bps": 500
+        },
+        {
+          "asset_id": 2,
+          "symbol": "ARB",
+          "decimals": 18,
+          "mark_price_wad": "1200000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 1500,
+          "im_bps": 1500,
+          "mm_bps": 800
+        }
+      ],
+      "accounts": [
+        {
+          "address": "0x9999000000000000000000000000000000000099",
+          "balances": [
+            "10000000000000000000000",
+            "0",
+            "0"
+          ]
+        },
+        {
+          "address": "0xb6e610921b0a0f6f608c0e1f29a845552bc6db2c",
+          "balances": [
+            "0",
+            "0",
+            "400000000000000000000"
+          ]
+        }
+      ],
+      "confirmed_obligations": {},
+      "obligations": [],
+      "intents": [
+        {
+          "trader": 0,
+          "base_asset": 1,
+          "quote_asset": 0,
+          "side": "BUY",
+          "amount_wad": "2000000000000000000",
+          "limit_price_wad": "2500000000000000000000",
+          "max_epoch": 100,
+          "nonce": "1",
+          "auth": {
+            "mode": "DIRECT"
+          }
+        },
+        {
+          "trader": 1,
+          "base_asset": 1,
+          "quote_asset": 0,
+          "side": "SELL",
+          "amount_wad": "2000000000000000000",
+          "limit_price_wad": "2500000000000000000000",
+          "max_epoch": 100,
+          "nonce": "2",
+          "auth": {
+            "mode": "EIP712",
+            "v": 27,
+            "r": "0x12e9f70b0dfea68c2373dcaecdfa32ade0bab036d5cab6b4330b02d0e439944b",
+            "s": "0x587e36303bdbba938779e94b3c8100a827ce9b9b88658f954c4992fc42110ef5"
+          }
+        }
+      ],
+      "nonce_bitmaps": {}
+    }
+  },
+  {
+    "name": "golden_04_stale_mark_price_rejected",
+    "expect_ok": false,
+    "expected_error": "StaleMarkPrice",
+    "input": {
+      "batch_epoch": 45,
+      "block_timestamp": 6000,
+      "max_price_staleness": 3600,
+      "max_price_deviation_bps": 2000,
+      "chain_id": 421614,
+      "verifying_contract": "0x2222222222222222222222222222222222222222",
+      "caller": "0x9999000000000000000000000000000000000099",
+      "assets": [
+        {
+          "asset_id": 0,
+          "symbol": "USDC",
+          "decimals": 6,
+          "mark_price_wad": "1000000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 0,
+          "im_bps": 500,
+          "mm_bps": 250
+        },
+        {
+          "asset_id": 1,
+          "symbol": "WETH",
+          "decimals": 18,
+          "mark_price_wad": "2500000000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 500,
+          "im_bps": 1000,
+          "mm_bps": 500
+        },
+        {
+          "asset_id": 2,
+          "symbol": "ARB",
+          "decimals": 18,
+          "mark_price_wad": "1200000000000000000",
+          "price_updated_at": 990,
+          "haircut_bps": 1500,
+          "im_bps": 1500,
+          "mm_bps": 800
+        }
+      ],
+      "accounts": [
+        {
+          "address": "0x9999000000000000000000000000000000000099",
+          "balances": [
+            "1000000000000000000000",
+            "0",
+            "0"
+          ]
+        }
+      ],
+      "confirmed_obligations": {},
+      "obligations": [],
+      "intents": [],
+      "nonce_bitmaps": {}
+    }
+  }
+]

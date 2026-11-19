@@ -1,0 +1,17 @@
+[profile.default]
+src = "contracts/src"
+test = "contracts/test"
+out = "contracts/out"
+libs = ["contracts/lib"]
+optimizer = true
+optimizer_runs = 1
+via_ir = true
+bytecode_hash = "none"
+cbor_metadata = false
+fs_permissions = [
+    { access = "read", path = "./tests/vectors" },
+    { access = "read", path = "./deployments" }
+]
+
+[fuzz]
+runs = 256
