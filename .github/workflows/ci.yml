@@ -14,7 +14,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends binaryen shellcheck
           python3 -m pip install --upgrade --break-system-packages pytest hypothesis z3-solver brotli eth-account eth-abi
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.91.0
         with:
           targets: wasm32-unknown-unknown
           components: clippy, rustfmt

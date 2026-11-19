@@ -1,7 +1,13 @@
 """Seam S2 tests: EIP-712 canonical signatures (421614 + 46630) and Python <-> Rust CLI differential parity."""
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import tempfile
 from pathlib import Path
+
+import pytest
 
 from tools.ref_sim.crypto_eip712 import (
     compute_intent_digest,
@@ -9,9 +15,20 @@ from tools.ref_sim.crypto_eip712 import (
     privkey_to_address,
     sign_digest,
 )
-from tools.ref_sim.engine import WAD, execute_batch_payload, recover_eip712_signer
+from tools.ref_sim.engine import WAD, ClearingEngineError, execute_batch_payload, recover_eip712_signer
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _find_cli() -> Path | None:
+    cands: list[Path] = []
+    if os.environ.get("CARGO_TARGET_DIR"):
+        cands.append(Path(os.environ["CARGO_TARGET_DIR"]) / "release" / "clearing-cli")
+    cands.extend([ROOT / "target" / "release" / "clearing-cli", ROOT / "target" / "debug" / "clearing-cli"])
+    for c in cands:
+        if c.exists() and os.access(c, os.X_OK):
+            return c
+    return None
 
 
 def test_s2_eip712_dual_chain_signatures_and_batch_execution() -> None:
@@ -24,7 +41,8 @@ def test_s2_eip712_dual_chain_signatures_and_batch_execution() -> None:
     for chain_id in (421614, 46630):
         ob_digest = compute_obligation_digest(chain_id, contract, addr_a, addr_b, 0, 500 * WAD, 10, 77)
         v_ob, r_ob, s_ob = sign_digest(pk_a, ob_digest)
-        assert recover_eip712_signer(ob_digest, v_ob, "0x" + r_ob.hex(), "0x" + s_ob.hex()).lower() == addr_a.lower()
+        rec = recover_eip712_signer(ob_digest, v_ob, "0x" + r_ob.hex(), "0x" + s_ob.hex())
+        assert rec is not None and rec.lower() == addr_a.lower()
 
         it_digest = compute_intent_digest(chain_id, contract, addr_b, 1, 0, 1, 1 * WAD, 2400 * WAD, 10, 88)
         v_it, r_it, s_it = sign_digest(pk_b, it_digest)
@@ -79,3 +97,39 @@ def test_s2_eip712_dual_chain_signatures_and_batch_execution() -> None:
         }
         out = execute_batch_payload(payload)
         assert int(out["total_matched_volume_wad"]) == 1 * WAD
+
+
+def test_s2_golden_vectors_and_rust_cli_differential_parity() -> None:
+    vectors = json.loads((ROOT / "tests" / "vectors" / "golden_batches.json").read_text(encoding="utf-8"))
+    assert len(vectors) >= 4
+    cli_bin = _find_cli()
+
+    with tempfile.TemporaryDirectory() as td:
+        for vec in vectors:
+            payload = vec["input"]
+            if vec["expect_ok"]:
+                py_res = execute_batch_payload(payload)
+                exp = vec["expected_receipt"]
+                assert int(py_res["cycles_eliminated"]) == int(exp["cycles_eliminated"])
+                assert py_res["fee_vault_deltas"] == exp["fee_vault_deltas"]
+                assert py_res["compressed_volume_by_asset"] == exp["compressed_volume_by_asset"]
+                if cli_bin is not None:
+                    pfile = Path(td) / f"{vec['name']}.json"
+                    pfile.write_text(json.dumps(payload), encoding="utf-8")
+                    proc = subprocess.run([str(cli_bin), "replay", str(pfile)], capture_output=True, text=True, check=True)
+                    cli_res = json.loads(proc.stdout)
+                    assert cli_res["cycles_eliminated"] == py_res["cycles_eliminated"]
+                    assert cli_res["auctions"] == py_res["auctions"]
+                    assert cli_res["compressed_volume_by_asset"] == py_res["compressed_volume_by_asset"]
+                    assert cli_res["fee_vault_deltas"] == py_res["fee_vault_deltas"]
+                    assert cli_res["post_accounts"] == py_res["post_accounts"]
+            else:
+                with pytest.raises(ClearingEngineError) as exc:
+                    execute_batch_payload(payload)
+                assert exc.value.code == vec["expected_error"]
+                if cli_bin is not None:
+                    pfile = Path(td) / f"{vec['name']}.json"
+                    pfile.write_text(json.dumps(payload), encoding="utf-8")
+                    proc = subprocess.run([str(cli_bin), "replay", str(pfile)], capture_output=True, text=True)
+                    assert proc.returncode != 0
+                    assert vec["expected_error"] in (proc.stderr + proc.stdout)

@@ -38,6 +38,7 @@ def test_s4_negative_mutations_caught(tmp_path: Path) -> None:
         "scripts/deploy-robinhood-testnet.sh",
         "scripts/build-final-video.sh",
         "docs/benchmarks/measured-gas-artifacts.json",
+        "docs/security/z3-formal-proofs.json",
     ]:
         src = ROOT / rel
         dst = tmp_path / rel

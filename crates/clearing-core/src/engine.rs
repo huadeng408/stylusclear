@@ -264,7 +264,11 @@ pub fn execute_underwater_liquidation(
         (capped_repay, raw_seize)
     };
 
-    if actual_seize.is_zero() || cmp_u256(&actual_repay, &min_lot).is_lt() {
+    let full_debt_clearance = actual_repay == abs_debt;
+    if actual_seize.is_zero()
+        || actual_repay.is_zero()
+        || (!full_debt_clearance && cmp_u256(&actual_repay, &min_lot).is_lt())
+    {
         return Err(ClearingError::InvalidIntent);
     }
 

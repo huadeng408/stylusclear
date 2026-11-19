@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# StylusClear v0.9.0 Idempotent Live Settlement & 4-Asset Seeding Script
+# StylusClear v1.0.0 Idempotent Live Settlement & 4-Asset Seeding Script
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
@@ -65,7 +65,7 @@ if [[ -n "${STYLUS_ADDR:-}" && "$STYLUS_ADDR" != "null" ]]; then
   cast send "$STYLUS_ADDR" "registerObligation(address,uint8,uint256)" "$COUNTERPARTY" 0 250000000000000000000 --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY" >/dev/null
   STYLUS_TX_HASH="$(cast send "$STYLUS_ADDR" "settleBatch(address[],(uint16,uint16,uint8,uint8,uint8,uint64,uint256,uint256,bytes32,bytes32)[],(uint16,uint8,uint8,uint8,uint8,uint8,uint64,uint256,uint256,uint256,bytes32,bytes32)[])" \
     "[$CALLER,$COUNTERPARTY]" "[(0,1,0,0,0,1000000,250000000000000000000,0,0x0000000000000000000000000000000000000000000000000000000000000000,0x0000000000000000000000000000000000000000000000000000000000000000)]" "[]" \
-    --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY" --json 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('transactionHash',''))" || true)"
+    --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY" --json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('transactionHash',''))" )"
   echo "[demo-live] Stylus settleBatch tx=${STYLUS_TX_HASH:-skipped}"
 fi
 

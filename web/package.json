@@ -1,13 +1,13 @@
 {
   "name": "stylusclear-workbench",
-  "version": "0.8.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Deterministic clearing workbench and live Arbitrum Sepolia / Orbit / Robinhood Chain JSON-RPC adapter for StylusClear",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "esbuild rpc-client.ts --bundle --format=esm --platform=browser --outfile=dist/rpc-client.mjs",
-    "test": "node --test ../tests/test_seam_s3_workbench.mjs",
+    "test": "node ../tests/test_seam_s3_workbench.mjs",
     "serve": "python3 -m http.server 8080"
   },
   "dependencies": {

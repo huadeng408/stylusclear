@@ -12,12 +12,12 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.ref_sim.crypto_eip712 import (
+from tools.ref_sim.crypto_eip712 import (  # noqa: E402
     privkey_to_address,
     sign_obligation_attestation,
     sign_trade_intent,
 )
-from tools.ref_sim.engine import ClearingError, execute_clearing_batch
+from tools.ref_sim.engine import ClearingError, execute_clearing_batch  # noqa: E402
 
 WAD = 10**18
 

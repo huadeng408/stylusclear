@@ -1,4 +1,4 @@
-"""Seam S1 tests: v0.7.0 clearing, 2-Origin BFS cycle netting, 512-bit UCPBA IR, and adaptive floor liquidation."""
+"""Seam S1 tests: v1.0.0 clearing, 2-Origin BFS cycle netting, 512-bit UCPBA IR, and adaptive floor liquidation."""
 from __future__ import annotations
 
 import pytest
@@ -103,3 +103,37 @@ def test_s1_two_origin_bfs_prefers_multilateral_cycle_and_selective_oracle() -> 
     }
     res = execute_batch_payload(payload)
     assert res["cycles_eliminated"] == 0
+
+
+def test_s1_v10_edge_guards() -> None:
+    from tools.ref_sim.engine import I256_MIN
+
+    # mm_bps == 1 must be rejected (bonus_bps = mm_bps // 2 == 0 deadlock guard)
+    bad_assets = [AssetRiskConfig(0, 6, 1 * WAD, 1_700_000_050, 0, 500, 1), AssetRiskConfig(1, 18, 2000 * WAD, 1_700_000_050, 0, 1000, 500)]
+    with pytest.raises(ClearingEngineError) as exc_mm:
+        execute_underwater_liquidation(1_700_000_100, 3600, bad_assets, [-100 * WAD, 1 * WAD], [200 * WAD, 1 * WAD], 0, 1, 10 * WAD)
+    assert exc_mm.value.code == "InvalidAssetConfig"
+
+    # I256_MIN balance must fail-closed with MathOverflow
+    with pytest.raises(ClearingEngineError) as exc_min:
+        evaluate_account_risk([I256_MIN], [AssetRiskConfig(0, 18, 1, 1_700_000_050, 0, 500, 250)])
+    assert exc_min.value.code == "MathOverflow"
+
+    # Zero-address account must be rejected
+    with pytest.raises(ClearingEngineError) as exc_zero:
+        execute_batch_payload(
+            {
+                "batch_epoch": 1,
+                "block_timestamp": 1000,
+                "max_price_staleness": 3600,
+                "max_price_deviation_bps": 2000,
+                "chain_id": 421614,
+                "verifying_contract": "0x" + "aa" * 20,
+                "caller": "0x" + "11" * 20,
+                "assets": [{"asset_id": 0, "decimals": 6, "mark_price_wad": WAD, "price_updated_at": 990, "haircut_bps": 0, "im_bps": 500, "mm_bps": 250}],
+                "accounts": [{"address": "0x" + "00" * 20, "balances": [WAD]}],
+                "obligations": [],
+                "intents": [],
+            }
+        )
+    assert exc_zero.value.code == "InvalidAssetConfig"

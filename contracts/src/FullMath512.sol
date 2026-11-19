@@ -46,17 +46,6 @@ library FullMath512 {
         }
     }
 
-    function gcd(uint256 a, uint256 b) internal pure returns (uint256) {
-        unchecked {
-            while (b != 0) {
-                uint256 r = a % b;
-                a = b;
-                b = r;
-            }
-            return a;
-        }
-    }
-
     function gtMul512(uint256 a, uint256 b, uint256 c, uint256 d) internal pure returns (bool res) {
         assembly ("memory-safe") {
             let mmL := mulmod(a, b, not(0))

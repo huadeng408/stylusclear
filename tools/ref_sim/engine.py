@@ -1,4 +1,4 @@
-"""StylusClear v0.7.0 bit-exact Python reference clearing & liquidation verifier.
+"""StylusClear v1.0.0 bit-exact Python reference clearing & liquidation verifier.
 
 Maintains 100% arithmetic, error-priority, cycle-compression, 512-bit UCPBA IR,
 and floor-capped underwater liquidation parity with:
@@ -210,7 +210,7 @@ def validate_asset_configs_selective(
             raise ClearingEngineError("InvalidAssetConfig")
         if cfg.haircut_bps < 0 or cfg.haircut_bps >= BPS_DENOM:
             raise ClearingEngineError("InvalidHaircut")
-        if cfg.mm_bps <= 0 or cfg.mm_bps > cfg.im_bps or cfg.im_bps > BPS_DENOM:
+        if cfg.mm_bps < 2 or cfg.mm_bps > cfg.im_bps or cfg.im_bps > BPS_DENOM:
             raise ClearingEngineError("InvalidAssetConfig")
         if (active_mask & (1 << idx)) != 0 and (
             block_timestamp < cfg.price_updated_at or (block_timestamp - cfg.price_updated_at) > max_price_staleness
@@ -237,7 +237,7 @@ def evaluate_account_risk(
     liab = 0
     req_im = 0
     req_mm = 0
-    for bal, cfg in zip(balances, assets):
+    for bal, cfg in zip(balances, assets, strict=True):
         _check_i256(bal)
         if bal > 0:
             val = mul_wad_floor(bal, cfg.mark_price_wad)
@@ -245,6 +245,8 @@ def evaluate_account_risk(
             gross = _check_u256(gross + val)
             eff = _check_u256(eff + scaled)
         elif bal < 0:
+            if bal == I256_MIN:
+                raise ClearingEngineError("MathOverflow")
             mag = -bal
             val = mul_wad_ceil(mag, cfg.mark_price_wad)
             liab = _check_u256(liab + val)
@@ -320,7 +322,7 @@ def compress_obligation_cycles(
     obligations: Sequence[ObligationEdge],
 ) -> CycleCompressionOutcome:
     num_accounts = len(account_addresses)
-    if len(obligations) > MAX_OBLIGATIONS or num_accounts > MAX_ACCOUNTS:
+    if len(obligations) > MAX_OBLIGATIONS or num_accounts > MAX_ACCOUNTS or num_assets > MAX_ASSETS:
         raise ClearingEngineError("BatchCapacityExceeded")
     if not obligations:
         return CycleCompressionOutcome(0, [0] * num_assets, [])
@@ -410,7 +412,7 @@ def _allocate_side_fills(
     caps = [quantize_down(intents[idx]["amount_wad"], step) for idx in eligible_pos]
     total_offered = _check_u256(sum(caps))
     if total_offered <= target_volume:
-        return list(zip(eligible_pos, caps))
+        return list(zip(eligible_pos, caps, strict=True))
 
     target_units = target_volume // step
     fills: list[int] = []
@@ -435,7 +437,7 @@ def _allocate_side_fills(
             fills[slot] += take * step
             rem_units -= take
 
-    return list(zip(eligible_pos, fills))
+    return list(zip(eligible_pos, fills, strict=True))
 
 
 def clear_single_market_auction(
@@ -610,6 +612,8 @@ def execute_underwater_liquidation(
     if pre_u_risk.health_wad >= 0 or underwater_balances[debt_asset] >= 0 or underwater_balances[collateral_asset] <= 0:
         raise ClearingEngineError("InvalidIntent")
 
+    if underwater_balances[debt_asset] == I256_MIN:
+        raise ClearingEngineError("MathOverflow")
     abs_debt = -underwater_balances[debt_asset]
     avail_coll = underwater_balances[collateral_asset]
     capped_repay = min(repay_amount_wad, abs_debt)
@@ -628,7 +632,8 @@ def execute_underwater_liquidation(
         actual_repay = capped_repay
         actual_seize = raw_seize
 
-    if actual_seize == 0 or actual_repay < MIN_INTENT_AMOUNT_WAD:
+    full_debt_clearance = actual_repay == abs_debt
+    if actual_seize == 0 or actual_repay == 0 or (not full_debt_clearance and actual_repay < MIN_INTENT_AMOUNT_WAD):
         raise ClearingEngineError("InvalidIntent")
 
     if liquidator_balances[debt_asset] < actual_repay:
@@ -724,9 +729,9 @@ def execute_batch_payload(payload: dict) -> dict:
     addrs: list[str] = []
     bals: list[list[int]] = []
     active_mask = 0
-    for i, acc in enumerate(raw_accounts):
+    for _i, acc in enumerate(raw_accounts):
         addr = _norm_addr(acc["address"])
-        if addr == "0x" + "00" * 40:
+        if addr == "0x" + "00" * 20:
             raise ClearingEngineError("InvalidAssetConfig")
         if addr in addrs:
             raise ClearingEngineError("DuplicateParticipant")
@@ -793,7 +798,10 @@ def execute_batch_payload(payload: dict) -> dict:
         else:
             mode = auth_obj.get("mode", "LEDGER")
         if isinstance(mode, str):
-            mode = {"pre_registered": 0, "ledger": 0, "direct_debtor": 1, "direct": 1, "eip712": 2}[mode.lower()]
+            ob_mode_map = {"pre_registered": 0, "ledger": 0, "direct_debtor": 1, "direct": 1, "eip712": 2}
+            if mode.lower() not in ob_mode_map:
+                raise ClearingEngineError("InvalidObligation")
+            mode = ob_mode_map[mode.lower()]
         if mode == 0:
             key = (u, v, a)
             avail = work_confirmed.get(key, 0)
@@ -828,7 +836,10 @@ def execute_batch_payload(payload: dict) -> dict:
     for idx, raw in enumerate(raw_intents):
         side_raw = raw["side"]
         if isinstance(side_raw, str):
-            side = 0 if side_raw.lower() == "buy" else 1
+            side_map = {"buy": 0, "sell": 1}
+            if side_raw.lower() not in side_map:
+                raise ClearingEngineError("InvalidIntent")
+            side = side_map[side_raw.lower()]
         else:
             side = int(side_raw)
         if side not in (0, 1):
@@ -864,7 +875,10 @@ def execute_batch_payload(payload: dict) -> dict:
         else:
             auth_mode = it_auth.get("mode", "DIRECT")
         if isinstance(auth_mode, str):
-            auth_mode = 0 if auth_mode.lower() in ("direct_caller", "direct") else 1
+            it_mode_map = {"direct_caller": 0, "direct": 0, "eip712": 1}
+            if auth_mode.lower() not in it_mode_map:
+                raise ClearingEngineError("InvalidIntent")
+            auth_mode = it_mode_map[auth_mode.lower()]
         if auth_mode == 0:
             if caller != addrs[tr]:
                 raise ClearingEngineError("UnauthorizedCaller")
@@ -927,7 +941,7 @@ def execute_batch_payload(payload: dict) -> dict:
             for intent_pos, side, fill_base, quote_xfer in executions:
                 norm_it = normalized_intents[intent_pos]
                 tr = norm_it["trader"]
-                if norm_it["auth_mode"] == 0 or fill_base == norm_it["amount_wad"]:
+                if norm_it["auth_mode"] == 0 or (norm_it["amount_wad"] - fill_base) < MIN_INTENT_AMOUNT_WAD:
                     _consume_nonce(work_bitmaps, tr, norm_it["nonce"])
                 if side == 0:
                     bals[tr][b_idx] = _check_i256(bals[tr][b_idx] + fill_base)
@@ -971,9 +985,14 @@ def execute_batch_payload(payload: dict) -> dict:
             {
                 "address": addrs[u],
                 "balances": [str(x) for x in bals[u]],
+                "gross_collateral_wad": str(post_risk.gross_collateral_wad),
+                "effective_collateral_wad": str(post_risk.effective_collateral_wad),
+                "total_liability_wad": str(post_risk.total_liability_wad),
+                "required_im_wad": str(post_risk.required_im_wad),
+                "required_mm_wad": str(post_risk.required_mm_wad),
+                "net_equity_wad": str(post_risk.net_equity_wad),
                 "health_wad": str(post_risk.health_wad),
                 "im_surplus_wad": str(post_risk.im_surplus_wad),
-                "net_equity_wad": str(post_risk.net_equity_wad),
             }
         )
 
@@ -981,8 +1000,9 @@ def execute_batch_payload(payload: dict) -> dict:
         "batch_epoch": batch_epoch,
         "cycles_eliminated": compression.cycles_eliminated,
         "total_matched_volume_wad": str(total_matched),
-        "compressed_volume_by_asset": [str(x) for x in compression.compressed_volume_by_asset],
-        "fee_vault_deltas": [str(x) for x in fee_deltas],
+        "compressed_volume_by_asset": {str(i): str(x) for i, x in enumerate(compression.compressed_volume_by_asset)},
+        "fee_vault_deltas": {str(i): str(x) for i, x in enumerate(fee_deltas)},
+        "nonce_bitmaps": {f"{u}:{w}": str(v) for (u, w), v in sorted(work_bitmaps.items())},
         "auctions": [
             {
                 "base_asset": r.base_asset,

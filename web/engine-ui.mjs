@@ -1,5 +1,5 @@
 /**
- * StylusClear v0.7.0 Isomorphic Clearing, Liquidation & Mesh Engine for Web Workbench
+ * StylusClear v1.0.0 Isomorphic Clearing, Liquidation & Mesh Engine for Web Workbench
  * - Zero plaintext funded private keys (D-13): keyless eth_call + cryptographic random nonceWord
  * - O(V^2) 2-Origin BFS cycle netting + memoized 64-desk mesh (<5ms slider latency, D-14)
  * - Full 4-asset support (USDC/USDG, WETH, ARB, NVDAx) + 512-bit UCPBA IR + adaptive floor liquidation
@@ -13,12 +13,13 @@ export const LIQUIDATION_BONUS_CAP_BPS = 250n;
 
 import { MEASURED_BENCHMARKS } from "./benchmarks.generated.mjs";
 
+const WB = MEASURED_BENCHMARKS.wasmBinary || MEASURED_BENCHMARKS.wasm_binary;
 export const MEASURED_BENCHMARK_SUMMARY = {
-  schemaVersion: MEASURED_BENCHMARKS.schema_version,
-  wasmRawBytes: MEASURED_BENCHMARKS.wasm_binary.raw_bytes,
-  wasmBrotliBytes: MEASURED_BENCHMARKS.wasm_binary.brotli_q11_bytes,
-  wasmSha256: MEASURED_BENCHMARKS.wasm_binary.sha256,
-  arbitrumSingleBlockGasLimit: MEASURED_BENCHMARKS.arbitrum_single_block_gas_limit,
+  schemaVersion: MEASURED_BENCHMARKS.schemaVersion || MEASURED_BENCHMARKS.schema_version,
+  wasmRawBytes: WB.raw_bytes,
+  wasmBrotliBytes: WB.brotli_q11_bytes,
+  wasmSha256: WB.sha256,
+  arbitrumSingleBlockGasLimit: MEASURED_BENCHMARKS.arbitrumSingleBlockGasLimit || MEASURED_BENCHMARKS.arbitrum_single_block_gas_limit || 32_000_000,
   workloads: MEASURED_BENCHMARKS.workloads,
 };
 

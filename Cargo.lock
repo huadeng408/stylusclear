@@ -569,7 +569,7 @@ dependencies = [
 
 [[package]]
 name = "clearing-cli"
-version = "0.8.0"
+version = "1.0.0"
 dependencies = [
  "alloy-primitives",
  "clearing-core",
@@ -580,14 +580,14 @@ dependencies = [
 
 [[package]]
 name = "clearing-core"
-version = "0.8.0"
+version = "1.0.0"
 dependencies = [
  "alloy-primitives",
 ]
 
 [[package]]
 name = "clearing-stylus"
-version = "0.8.0"
+version = "1.0.0"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -2008,7 +2008,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stylus-host-mock"
-version = "0.8.0"
+version = "1.0.0"
 dependencies = [
  "alloy-primitives",
  "mini-alloc",

@@ -1,4 +1,4 @@
-name: Deploy Workbench to GitHub Pages
+name: Deploy StylusClear Workbench to GitHub Pages
 
 on:
   push:
@@ -10,18 +10,27 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   deploy:
-    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Touch .nojekyll
-        run: touch web/.nojekyll
+      - name: Stage static workbench files
+        run: |
+          mkdir -p _site/dist _site/deployments
+          cp web/index.html web/engine-ui.mjs web/benchmarks.generated.mjs web/.nojekyll _site/
+          cp web/dist/rpc-client.mjs _site/dist/
+          cp web/deployments/*.json _site/deployments/
+      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: "_site"
       - id: deployment
         uses: actions/deploy-pages@v4

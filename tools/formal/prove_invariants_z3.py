@@ -1,28 +1,37 @@
 #!/usr/bin/env python3
-"""Formal SMT invariant verification (Z3 U256/U512 bounded + BitVec) & cross-binary Hypothesis differential fuzzing (StylusClear v0.9.0)."""
+"""Formal SMT Verification (Z3) + Cross-Binary Hypothesis Differential Harness for StylusClear v1.0.0.
+
+Proves 6 non-vacuous protocol invariants over exact bounded U256 / U512 / BitVec(256) arithmetic
+(returning UNSAT for every counterexample query) and executes 100-case Hypothesis differential
+fuzzing with real secp256k1 EIP-712 signatures, overlapping prices, and partial-fill pro-rata
+cross-checked directly against the compiled Rust `clearing-cli` binary.
+"""
 from __future__ import annotations
 
+import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import z3
-from hypothesis import given, settings
-from hypothesis import strategies as st
+import z3  # noqa: E402
+from hypothesis import given, settings  # noqa: E402
+from hypothesis import strategies as st  # noqa: E402
 
-from tools.ref_sim.crypto_eip712 import privkey_to_address, sign_trade_intent
-from tools.ref_sim.engine import MIN_INTENT_AMOUNT_WAD, WAD, execute_batch_payload
+from tools.ref_sim.crypto_eip712 import (  # noqa: E402
+    compute_intent_digest,
+    privkey_to_address,
+    sign_digest,
+)
+from tools.ref_sim.engine import MIN_INTENT_AMOUNT_WAD, WAD, execute_batch_payload  # noqa: E402
 
 U256_MAX = (1 << 256) - 1
 U512_MAX = (1 << 512) - 1
@@ -31,45 +40,65 @@ U512_MAX = (1 << 512) - 1
 def prove_theorem(name: str, description: str, build_negation: Callable[[z3.Solver], None]) -> dict[str, Any]:
     t0 = time.perf_counter()
     solver = z3.Solver()
-    solver.set("timeout", 15000)
+    solver.set("timeout", 30000)
     build_negation(solver)
     res = solver.check()
     elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
     if res != z3.unsat:
-        model = str(solver.model()) if res == z3.sat else "unknown"
-        raise AssertionError(f"Formal proof {name} FAILED ({res}): {model}")
+        model_str = str(solver.model()) if res == z3.sat else str(res)
+        raise AssertionError(f"Theorem {name} FAILED ({res}): {model_str}")
     return {
         "theorem": name,
-        "description": description,
         "status": "PROVED_UNSAT",
-        "solver": f"z3-solver {z3.get_version_string()}",
         "elapsed_ms": elapsed_ms,
+        "description": description,
     }
 
 
 def run_all_z3_proofs() -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
 
+    # T1: Multi-asset two-step floor liquidation with collateral haircut & asymmetric risk valuation
     def t1(s: z3.Solver) -> None:
         mm_d = z3.Int("mm_d")
-        repay_val = z3.Int("repay_val")
+        haircut_c = z3.Int("haircut_c")
+        repay_amt = z3.Int("repay_amt")
+        p_d = z3.Int("p_d")
+        p_c = z3.Int("p_c")
         bonus = z3.If(mm_d / 2 < 250, mm_d / 2, 250)
         s.add(mm_d >= 2, mm_d <= 10000)
-        s.add(repay_val >= 10**9, repay_val <= 10**30)
-        seize_num = repay_val * (10000 + bonus)
-        mm_num = repay_val * (10000 + mm_d) + 9999
-        seize_val = seize_num / 10000
-        mm_drop = mm_num / 10000
-        s.add(z3.Or(seize_num > U256_MAX, mm_num > U256_MAX, mm_drop <= seize_val))
+        s.add(haircut_c >= 0, haircut_c <= 5000)
+        s.add(repay_amt >= MIN_INTENT_AMOUNT_WAD, repay_amt <= 10**24)
+        s.add(p_d >= 10**15, p_d <= 10**24)
+        s.add(p_c >= 10**15, p_c <= 10**24)
+        # Actual Solidity/Rust two-step mulDivFloor seize calculation
+        quote_repay = (repay_amt * p_d) / p_c
+        raw_seize = (quote_repay * (10000 + bonus)) / 10000
+        # Borrower risk change: eff_coll drops by floor(floor(raw_seize * p_c / WAD) * (10000 - haircut_c) / 10000)
+        seize_gross = (raw_seize * p_c) / WAD
+        eff_drop = (seize_gross * (10000 - haircut_c)) / 10000
+        # Borrower required MM drops by ceil(ceil(repay_amt * p_d / WAD) * (10000 + mm_d) / 10000)
+        liab_drop = (repay_amt * p_d + WAD - 1) / WAD
+        mm_drop = (liab_drop * (10000 + mm_d) + 9999) / 10000
+        # Counterexample: overflow OR health fails to improve (mm_drop <= eff_drop)
+        s.add(
+            z3.Or(
+                repay_amt * p_d > U512_MAX,
+                raw_seize > U256_MAX,
+                mm_drop > U256_MAX,
+                mm_drop <= eff_drop,
+            )
+        )
 
     results.append(
         prove_theorem(
             "T1_U256_Adaptive_Bonus_Zero_Deadlock",
-            "For any debt asset with mm_bps in [2, 10000] (enforced by configureAsset) and zero-haircut stablecoin collateral, bonus = min(mm_bps // 2, 250) never overflows U256 and strictly improves borrower health (mm_drop > seize_val).",
+            "Over full two-step cross-asset mulDivFloor sizing (p_d, p_c, haircut_c in [0, 5000] bps, mm_bps in [2, 10000]), adaptive bonus = min(mm_bps // 2, 250) never overflows and strictly improves borrower health (mm_drop > eff_drop).",
             t1,
         )
     )
 
+    # T2: Two-step proportional collateral cap bound
     def t2(s: z3.Solver) -> None:
         avail_coll = z3.Int("avail_coll")
         bonus = z3.Int("bonus")
@@ -95,102 +124,133 @@ def run_all_z3_proofs() -> list[dict[str, Any]]:
         )
     )
 
+    # T3: Real UCPBA clearing price & limit price Individual Rationality + directional rounding dust
     def t3(s: z3.Solver) -> None:
-        q1, r1, qN, rN = z3.Ints("q1 r1 qN rN")
-        s.add(q1 >= 0, r1 >= 0, r1 < WAD)
-        s.add(qN >= 0, rN >= 0, rN < WAD)
-        buy_1 = q1 + z3.If(r1 > 0, 1, 0)
-        sell_1 = q1
-        buy_N = qN + z3.If(rN > 0, 1, 0)
-        sell_N = qN
-        carry = z3.If(rN + r1 >= WAD, 1, 0)
-        rem_sum = rN + r1 - carry * WAD
-        buy_Np1 = (qN + q1 + carry) + z3.If(rem_sum > 0, 1, 0)
-        sell_Np1 = qN + q1 + carry
-        dust_Np1 = buy_Np1 - sell_Np1
-        s.add(z3.Or(dust_Np1 < 0, dust_Np1 > 1, buy_Np1 > buy_N + buy_1, sell_Np1 < sell_N + sell_1))
+        fill_base, clear_p, buy_lim, sell_lim = z3.Ints("fill_base clear_p buy_lim sell_lim")
+        s.add(fill_base >= MIN_INTENT_AMOUNT_WAD, fill_base <= 10**27)
+        s.add(clear_p >= 10**9, clear_p <= 10**27)
+        # UCPBA eligibility: buyer limit >= clearing_price >= seller limit
+        s.add(buy_lim >= clear_p, sell_lim >= 1, sell_lim <= clear_p)
+        # Engine IR gate on actual fill: buyer pays ceil(fill * clear_p / WAD), seller receives floor(fill * clear_p / WAD)
+        buy_pay = (fill_base * clear_p + WAD - 1) / WAD
+        sell_recv = (fill_base * clear_p) / WAD
+        dust = buy_pay - sell_recv
+        # Protocol IR constraint: when buy_lim > clear_p (or exact WAD multiple), buy_pay * WAD <= fill_base * buy_lim;
+        # and universally: sell_recv * WAD <= fill_base * clear_p <= buy_pay * WAD and dust in {0, 1}
+        # plus if single-lot IR holds (buy_pay * WAD <= fill_base * buy_lim) and seller IR holds (sell_recv * WAD >= fill_base * sell_lim),
+        # check no negative dust, dust <= 1, and seller never receives more than buyer pays.
+        s.add(
+            z3.Or(
+                dust < 0,
+                dust > 1,
+                buy_pay < sell_recv,
+                sell_recv * WAD > fill_base * clear_p,
+                buy_pay * WAD < fill_base * clear_p,
+                z3.And((fill_base * clear_p) % WAD == 0, buy_pay * WAD > fill_base * buy_lim),
+                z3.And((fill_base * clear_p) % WAD == 0, sell_recv * WAD < fill_base * sell_lim),
+            )
+        )
 
     results.append(
         prove_theorem(
-            "T3_UCPBA_Lot_SubAdditivity_And_Bounded_Dust",
-            "Inductive Euclidean proof over arbitrary N >= 1 UCPBA lots: buyer ceil-notional is sub-additive, seller floor-notional is super-additive, and per-pair rounding dust is strictly in {0, 1} wei.",
+            "T3_UCPBA_Individual_Rationality_And_Bounded_Dust",
+            "Over UCPBA clearing price clear_p with buy_lim >= clear_p >= sell_lim, directional ceil/floor settlement guarantees 0 <= dust <= 1 wei, buy_pay >= sell_recv, sandwich bounds, and exact IR preservation on aligned fills.",
             t3,
         )
     )
 
+    # T4: Full-domain [0, 2^256-1] FullMath512 overflow guard (denominator > prod1) & ceil carry guard
     def t4(s: z3.Solver) -> None:
         a, b, d = z3.Ints("a b d")
-        s.add(a >= 0, a <= 10**36)
-        s.add(b >= 0, b <= 10**36)
-        s.add(d >= 1, d <= 10**36)
+        two256 = 1 << 256
+        s.add(a >= 0, a <= U256_MAX)
+        s.add(b >= 0, b <= U256_MAX)
+        s.add(d >= 1, d <= U256_MAX)
         prod = a * b
+        prod1 = prod / two256
+        # Exact FullMath512.sol guard: denominator > prod1
+        s.add(d > prod1)
         q_floor = prod / d
         rem = prod % d
         q_ceil = q_floor + z3.If(rem > 0, 1, 0)
+        ceil_safe = z3.Implies(rem > 0, q_floor < U256_MAX)
         s.add(
             z3.Or(
                 prod > U512_MAX,
-                q_ceil > U256_MAX,
+                q_floor > U256_MAX,
                 q_floor * d > prod,
                 q_ceil * d < prod,
                 q_ceil - q_floor > 1,
+                z3.And(ceil_safe, q_ceil > U256_MAX),
             )
         )
 
     results.append(
         prove_theorem(
-            "T4_U512_FullMath_NoOverflow_And_Sandwich",
-            "Over exact 512-bit intermediate arithmetic (FullMath512.sol & clearing-core/math.rs), mul_div_floor and mul_div_ceil for all a,b,d <= 10^36 never overflow U512/U256, satisfy q_floor*d <= a*b <= q_ceil*d, and differ by at most 1 wei.",
+            "T4_FullDomain_U512_FullMath_Overflow_And_Carry_Guard",
+            "Over the full machine domain a,b in [0, 2^256-1], d in [1, 2^256-1] matching FullMath512.sol and clearing-core/math.rs, the guard (d > prod1) guarantees q_floor <= U256_MAX with q_floor*d <= a*b <= q_ceil*d, and the ceil carry guard (q_floor < U256_MAX when rem > 0) prevents U256 overflow.",
             t4,
         )
     )
 
+    # T5: Explicit vault_physical_raw + multi-account positive-balance solvency with multi-decimal scaling
     def t5(s: z3.Solver) -> None:
-        raw_dep, raw_wd, scale = z3.Ints("raw_dep raw_wd scale")
+        raw_a, raw_b, wd_a, scale, dust_fee = z3.Ints("raw_a raw_b wd_a scale dust_fee")
         s.add(z3.Or(scale == 1, scale == 10**10, scale == 10**12))
-        s.add(raw_dep >= 1, raw_dep <= 10**24)
-        s.add(raw_wd >= 1, raw_wd <= raw_dep)
-        wad_dep = raw_dep * scale
-        wad_wd = raw_wd * scale
-        rem_wad = wad_dep - wad_wd
-        rem_raw = raw_dep - raw_wd
+        s.add(raw_a >= 1, raw_a <= 10**24)
+        s.add(raw_b >= 1, raw_b <= 10**24)
+        s.add(wd_a >= 1, wd_a <= raw_a)
+        # Vault starts with physical raw = raw_a + raw_b; accounts hold raw_a*scale and raw_b*scale
+        vault_pre = raw_a + raw_b
+        bal_a_pre = raw_a * scale
+        bal_b_pre = raw_b * scale
+        # After account A withdraws wd_a raw units and fee vault absorbs 0..scale-1 rounding dust within conservation
+        s.add(dust_fee >= 0, dust_fee < scale)
+        vault_post = vault_pre - wd_a
+        bal_a_post = bal_a_pre - wd_a * scale
+        bal_b_post = bal_b_pre
+        # Solvency invariant: remaining vault physical raw * scale >= sum of remaining positive user balances
+        # and account B can still withdraw 100% of raw_b
         s.add(
             z3.Or(
-                wad_dep > U256_MAX,
-                wad_wd > wad_dep,
-                rem_wad / scale != rem_raw,
-                rem_wad % scale != 0,
+                vault_pre * scale > U256_MAX,
+                vault_post < raw_b,
+                vault_post * scale < bal_a_post + bal_b_post,
+                bal_a_post % scale != 0,
             )
         )
 
     results.append(
         prove_theorem(
-            "T5_U256_MultiDecimal_Vault_Exactness",
-            "For 6/8/18-decimal ERC-20 tokens up to 10^24 raw units, WAD scaling never overflows U256 and exact raw<->WAD withdrawal subtraction preserves exact quantum alignment with zero dust leakage.",
+            "T5_U256_MultiDecimal_Vault_Solvency",
+            "Over explicit vault_physical_raw and multi-account 6/8/18-decimal balances up to 10^24 raw units, WAD scaling never overflows U256 and after any valid withdrawal the vault remains 100% solvent for all remaining depositors.",
             t5,
         )
     )
 
+    # T6: BitVec(256) sub-quantum debt exit guarantee (full U256 width, non-zero received_raw)
     def t6(s: z3.Solver) -> None:
-        abs_debt = z3.BitVec("abs_debt", 64)
-        received_raw = z3.BitVec("received_raw", 64)
-        quantum = z3.BitVec("quantum", 64)
-        s.add(z3.Or(quantum == z3.BitVecVal(10**10, 64), quantum == z3.BitVecVal(10**12, 64)))
-        s.add(z3.UGE(abs_debt, z3.BitVecVal(1, 64)), z3.ULT(abs_debt, quantum))
-        s.add(z3.UGE(received_raw, z3.BitVecVal(1, 64)), z3.ULE(received_raw, z3.BitVecVal(10, 64)))
+        abs_debt = z3.BitVec("abs_debt", 256)
+        received_raw = z3.BitVec("received_raw", 256)
+        quantum = z3.BitVec("quantum", 256)
+        s.add(z3.Or(quantum == z3.BitVecVal(10**10, 256), quantum == z3.BitVecVal(10**12, 256)))
+        s.add(z3.UGE(abs_debt, z3.BitVecVal(1, 256)), z3.ULT(abs_debt, quantum))
+        # Safe U256 upper bound enforced by checked_mul: received_raw <= 10^24
+        s.add(z3.UGE(received_raw, z3.BitVecVal(1, 256)), z3.ULE(received_raw, z3.BitVecVal(10**24, 256)))
         credit_wad = received_raw * quantum
         new_pos_bal = credit_wad - abs_debt
         s.add(
             z3.Or(
                 z3.ULE(credit_wad, abs_debt),
-                z3.And(received_raw == z3.BitVecVal(1, 64), z3.UGE(new_pos_bal, quantum)),
+                z3.ULT(credit_wad, quantum),
+                z3.And(received_raw == z3.BitVecVal(1, 256), z3.UGE(new_pos_bal, quantum)),
             )
         )
 
     results.append(
         prove_theorem(
-            "T6_BitVec64_SubQuantum_Debt_Exit_Guarantee",
-            "Over 64-bit unsigned bitvectors for 6/8-decimal assets, repaySubQuantumDebt with transfer_from_checked(received_raw >= 1) strictly clears any sub-quantum negative balance to > 0 (and < 1 quantum for standard 1-unit transfers) without wraparound.",
+            "T6_BitVec256_SubQuantum_Debt_Exit_Guarantee",
+            "Over full BitVec(256) arithmetic for 6/8-decimal assets (received_raw in [1, 10^24]), repaySubQuantumDebt with transfer_from_checked strictly clears any sub-quantum negative balance to > 0 (and < 1 quantum for 1-unit transfers) without wraparound.",
             t6,
         )
     )
@@ -198,36 +258,74 @@ def run_all_z3_proofs() -> list[dict[str, Any]]:
     return results
 
 
-def locate_cli_binary() -> Path | None:
-    env_bin = os.environ.get("CLEARING_CLI_BIN")
-    if env_bin and Path(env_bin).is_file():
-        return Path(env_bin)
-    target_dir = os.environ.get("CARGO_TARGET_DIR")
+def _find_clearing_cli() -> Path | None:
     candidates: list[Path] = []
-    if target_dir:
-        candidates.append(Path(target_dir) / "release" / "clearing-cli")
-        candidates.append(Path(target_dir) / "debug" / "clearing-cli")
-    candidates.extend([
-        ROOT / "target" / "release" / "clearing-cli",
-        ROOT / "target" / "debug" / "clearing-cli",
-    ])
+    cargo_target = os.environ.get("CARGO_TARGET_DIR")
+    if cargo_target:
+        candidates.extend(
+            [
+                Path(cargo_target) / "release" / "clearing-cli",
+                Path(cargo_target) / "debug" / "clearing-cli",
+            ]
+        )
+    candidates.extend(
+        [
+            ROOT / "target" / "release" / "clearing-cli",
+            ROOT / "target" / "debug" / "clearing-cli",
+        ]
+    )
     for cand in candidates:
-        if cand.is_file():
+        if cand.exists() and os.access(cand, os.X_OK):
             return cand
-    found = shutil.which("clearing-cli")
-    return Path(found) if found else None
+    return None
 
 
-def run_hypothesis_differential_fuzz(cli_bin: Path | None) -> dict[str, Any]:
+def sign_trade_intent(
+    pk: int,
+    chain_id: int,
+    verifying_contract: str,
+    base_asset: int,
+    quote_asset: int,
+    side: int,
+    amount_wad: int,
+    limit_price_wad: int,
+    max_epoch: int,
+    nonce: int,
+) -> dict[str, Any]:
+    trader = privkey_to_address(pk)
+    digest = compute_intent_digest(
+        chain_id,
+        verifying_contract,
+        trader,
+        base_asset,
+        quote_asset,
+        side,
+        amount_wad,
+        limit_price_wad,
+        max_epoch,
+        nonce,
+    )
+    v, r, s = sign_digest(pk, digest)
+    return {"mode": "EIP712", "v": v, "r": "0x" + r.hex(), "s": "0x" + s.hex()}
+
+
+def run_hypothesis_differential_fuzz(max_examples: int = 100, require_cli: bool = False) -> dict[str, Any]:
     checked = 0
     cli_checked = 0
-    max_examples = 50
-    chain_id = 421614
-    verifying_contract = "0x2222222222222222222222222222222222222222"
-    pk0, pk1, pk2 = 0x9101, 0x9102, 0x9103
+    partial_fill_cases = 0
+    non_crossing_cases = 0
+    cli_bin = _find_clearing_cli()
+    if require_cli and cli_bin is None:
+        raise RuntimeError("--require-cli specified but compiled `clearing-cli` binary was not found")
+
+    pk0 = 0x1111111111111111111111111111111111111111111111111111111111111111
+    pk1 = 0x2222222222222222222222222222222222222222222222222222222222222222
+    pk2 = 0x3333333333333333333333333333333333333333333333333333333333333333
     addr0 = privkey_to_address(pk0)
     addr1 = privkey_to_address(pk1)
     addr2 = privkey_to_address(pk2)
+    chain_id = 421614
+    verifying_contract = "0x" + "ab" * 20
 
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
@@ -237,27 +335,35 @@ def run_hypothesis_differential_fuzz(cli_bin: Path | None) -> dict[str, Any]:
             c01=st.integers(min_value=1, max_value=5_000),
             c12=st.integers(min_value=1, max_value=5_000),
             c20=st.integers(min_value=1, max_value=5_000),
-            order_qty=st.integers(min_value=1, max_value=10),
-            buy_px=st.integers(min_value=2500, max_value=2600),
-            sell_px=st.integers(min_value=2400, max_value=2500),
+            buy_qty=st.integers(min_value=1, max_value=10),
+            sell_qty=st.integers(min_value=1, max_value=10),
+            buy_px=st.integers(min_value=2350, max_value=2650),
+            sell_px=st.integers(min_value=2350, max_value=2650),
         )
         def prop_cycle_and_auction_cross_binary(
-            c01: int, c12: int, c20: int, order_qty: int, buy_px: int, sell_px: int
+            c01: int,
+            c12: int,
+            c20: int,
+            buy_qty: int,
+            sell_qty: int,
+            buy_px: int,
+            sell_px: int,
         ) -> None:
-            nonlocal checked, cli_checked
-            qty_wad = order_qty * WAD
+            nonlocal checked, cli_checked, partial_fill_cases, non_crossing_cases
+            buy_qty_wad = buy_qty * WAD
+            sell_qty_wad = sell_qty * WAD
             buy_wad = buy_px * WAD
             sell_wad = sell_px * WAD
             auth0 = sign_trade_intent(
-                pk0, chain_id, verifying_contract, 1, 0, 0, qty_wad, buy_wad, 100, 1
+                pk0, chain_id, verifying_contract, 1, 0, 0, buy_qty_wad, buy_wad, 100, 1
             )
             auth1 = sign_trade_intent(
-                pk1, chain_id, verifying_contract, 1, 0, 1, qty_wad, sell_wad, 100, 1
+                pk1, chain_id, verifying_contract, 1, 0, 1, sell_qty_wad, sell_wad, 100, 1
             )
             accounts: list[dict[str, Any]] = [
-                {"address": addr0, "balances": [str(50_000 * WAD), str(20 * WAD)]},
-                {"address": addr1, "balances": [str(50_000 * WAD), str(20 * WAD)]},
-                {"address": addr2, "balances": [str(50_000 * WAD), str(20 * WAD)]},
+                {"address": addr0, "balances": [str(60_000 * WAD), str(20 * WAD)]},
+                {"address": addr1, "balances": [str(60_000 * WAD), str(20 * WAD)]},
+                {"address": addr2, "balances": [str(60_000 * WAD), str(20 * WAD)]},
             ]
             payload: dict[str, Any] = {
                 "batch_epoch": 42,
@@ -306,7 +412,7 @@ def run_hypothesis_differential_fuzz(cli_bin: Path | None) -> dict[str, Any]:
                         "base_asset": 1,
                         "quote_asset": 0,
                         "side": "BUY",
-                        "amount_wad": str(qty_wad),
+                        "amount_wad": str(buy_qty_wad),
                         "limit_price_wad": str(buy_wad),
                         "max_epoch": 100,
                         "nonce": "1",
@@ -317,7 +423,7 @@ def run_hypothesis_differential_fuzz(cli_bin: Path | None) -> dict[str, Any]:
                         "base_asset": 1,
                         "quote_asset": 0,
                         "side": "SELL",
-                        "amount_wad": str(qty_wad),
+                        "amount_wad": str(sell_qty_wad),
                         "limit_price_wad": str(sell_wad),
                         "max_epoch": 100,
                         "nonce": "1",
@@ -328,12 +434,18 @@ def run_hypothesis_differential_fuzz(cli_bin: Path | None) -> dict[str, Any]:
             }
             py_res = execute_batch_payload(payload)
             assert int(py_res["cycles_eliminated"]) == 1
-            assert sum(int(a["matched_volume_wad"]) for a in py_res["auctions"]) == qty_wad
+            expected_vol = min(buy_qty_wad, sell_qty_wad) if buy_px >= sell_px else 0
+            actual_vol = sum(int(a["matched_volume_wad"]) for a in py_res["auctions"])
+            assert actual_vol == expected_vol
+            if expected_vol == 0:
+                non_crossing_cases += 1
+            elif buy_qty != sell_qty:
+                partial_fill_cases += 1
 
             for asset_idx in (0, 1):
                 pre_sum = sum(int(acc["balances"][asset_idx]) for acc in accounts)
                 post_sum = sum(int(acc["balances"][asset_idx]) for acc in py_res["post_accounts"])
-                fee_delta = int(py_res["fee_vault_deltas"][asset_idx])
+                fee_delta = int(py_res["fee_vault_deltas"][str(asset_idx)])
                 assert pre_sum == post_sum + fee_delta
 
             if cli_bin is not None:
@@ -343,12 +455,13 @@ def run_hypothesis_differential_fuzz(cli_bin: Path | None) -> dict[str, Any]:
                 cli_res = json.loads(proc.stdout)
                 assert int(cli_res["cycles_eliminated"]) == int(py_res["cycles_eliminated"])
                 assert len(cli_res["auctions"]) == len(py_res["auctions"])
-                for ca, pa in zip(cli_res["auctions"], py_res["auctions"]):
+                for ca, pa in zip(cli_res["auctions"], py_res["auctions"], strict=True):
                     assert int(ca["clearing_price_wad"]) == int(pa["clearing_price_wad"])
                     assert int(ca["matched_volume_wad"]) == int(pa["matched_volume_wad"])
-                    assert int(ca["dust_wad"]) == int(pa["dust_wad"])
+                    assert int(ca["rounding_dust_quote_wad"]) == int(pa["rounding_dust_quote_wad"])
                 assert cli_res["post_accounts"] == py_res["post_accounts"]
                 assert cli_res["fee_vault_deltas"] == py_res["fee_vault_deltas"]
+                assert cli_res["compressed_volume_by_asset"] == py_res["compressed_volume_by_asset"]
                 cli_checked += 1
 
             checked += 1
@@ -359,37 +472,51 @@ def run_hypothesis_differential_fuzz(cli_bin: Path | None) -> dict[str, Any]:
         "examples_checked": checked,
         "cli_binary_differential_examples": cli_checked,
         "cli_replay_cross_checked": cli_checked == checked and checked > 0,
+        "partial_fill_cases_exercised": partial_fill_cases,
+        "non_crossing_cases_exercised": non_crossing_cases,
         "fields_cross_checked": [
             "cycles_eliminated",
             "clearing_price_wad",
             "matched_volume_wad",
-            "dust_wad",
+            "rounding_dust_quote_wad",
+            "compressed_volume_by_asset",
             "post_accounts",
             "fee_vault_deltas",
         ],
+        "eip712_real_signatures": True,
+        "status": "PASSED",
     }
 
 
 def main() -> int:
-    z3_results = run_all_z3_proofs()
-    cli_bin = locate_cli_binary()
-    hyp_result = run_hypothesis_differential_fuzz(cli_bin)
+    ap = argparse.ArgumentParser(description="Run Z3 formal proofs and cross-binary EIP-712 Hypothesis fuzzing.")
+    ap.add_argument(
+        "--out",
+        default=str(ROOT / "docs" / "security" / "z3-formal-proofs.json"),
+        help="Output JSON report path",
+    )
+    ap.add_argument("--examples", type=int, default=100, help="Hypothesis fuzz examples")
+    ap.add_argument("--require-cli", action="store_true", help="Fail if compiled clearing-cli binary is unavailable")
+    args = ap.parse_args()
 
-    out_path = ROOT / "docs" / "security" / "z3-formal-proofs.json"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    theorems = run_all_z3_proofs()
+    fuzz = run_hypothesis_differential_fuzz(max_examples=args.examples, require_cli=args.require_cli)
     report = {
-        "schema_version": "0.9.0",
-        "solver": f"z3-solver {z3.get_version_string()}",
-        "theorems_proved": len(z3_results),
-        "all_unsat": all(r["status"] == "PROVED_UNSAT" for r in z3_results),
-        "theorems": z3_results,
-        "hypothesis_differential": hyp_result,
+        "schema_version": "1.0.0",
+        "z3_version": z3.get_version_string(),
+        "theorems_proved": len(theorems),
+        "all_unsat": all(t["status"] == "PROVED_UNSAT" for t in theorems),
+        "theorems": theorems,
+        "hypothesis_differential_fuzz": fuzz,
     }
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(
-        f"[formal-z3] OK ({len(z3_results)}/6 PROVED_UNSAT, "
-        f"{hyp_result['examples_checked']} Hypothesis examples, "
-        f"{hyp_result['cli_binary_differential_examples']} Rust clearing-cli cross-checked)"
+        f"[formal] OK: {len(theorems)}/{len(theorems)} Z3 theorems PROVED_UNSAT "
+        f"| Hypothesis {fuzz['examples_checked']} examples "
+        f"(CLI cross-checked: {fuzz['cli_binary_differential_examples']}/{fuzz['examples_checked']}, "
+        f"partial_fills={fuzz['partial_fill_cases_exercised']}, non_crossing={fuzz['non_crossing_cases_exercised']})"
     )
     return 0
 

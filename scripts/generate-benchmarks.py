@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""Isomorphic Rust/Foundry (`vm.cool()`, `optimizer_runs = 200`) benchmark parser & report generator (`v0.9.0`)."""
+"""Isomorphic Rust/Foundry (`vm.cool()`, `optimizer_runs = 200`) benchmark parser & report generator (`v1.0.0`)."""
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
 import re
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+
+
+def _pct1(val: float) -> str:
+    return str(Decimal(str(val)).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP))
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS_JSON = ROOT / "docs" / "benchmarks" / "measured-gas-artifacts.json"
@@ -53,11 +58,11 @@ def render_markdown(data: dict) -> str:
         rows.append(
             f"| `{w['tier']}` | {w['accounts']} | {w['obligations']} | {w['cycles_eliminated']} | {w['intents']} "
             f"| `{w['solidity_evm_gas']:,}` | `{w['wasm_instructions']:,}` | `{w['stylus_ink']:,}` "
-            f"| `{w['stylus_total_gas_est']:,}` | **{w['gas_reduction_pct']:.1f}% (`{w['speedup_x']:.2f}x`)** |"
+            f"| `{w['stylus_total_gas_est']:,}` | **{_pct1(w['gas_reduction_pct'])}% (`{w['speedup_x']:.2f}x`)** |"
         )
     table = "\n".join(rows)
     header_bytes = wb["brotli_q11_bytes"] + 4
-    return f"""# StylusClear v0.9.0 Isomorphic Cold-Storage Gas & Stylus Ink Benchmark Report
+    return f"""# StylusClear v1.0.0 Isomorphic Cold-Storage Gas & Stylus Ink Benchmark Report
 
 * **Calibration Status**: `{data['calibration_status']}`
 * **Arbitrum Single-Block Gas Limit ([Chain Params](https://docs.arbitrum.io/arbitrum-essentials/reference/chain-params))**: `32,000,000` gas (`Stress` tier verified `< 32M` under cold storage `vm.cool()`)
@@ -79,6 +84,7 @@ def render_web_mjs(data: dict) -> str:
     payload = {
         "schemaVersion": data["schema_version"],
         "calibrationStatus": data["calibration_status"],
+        "arbitrumSingleBlockGasLimit": 32_000_000,
         "wasmBinary": data["wasm_binary"],
         "workloads": data["workloads"],
     }
@@ -107,7 +113,7 @@ def verify_cross_doc_sync(existing: dict) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--foundry-log", type=Path)
-    ap.add_argument("--wasmi-json", type=Path)
+    ap.add_argument("--analytical-json", "--wasmi-json", dest="analytical_json", type=Path)
     ap.add_argument("--verify-only", action="store_true")
     args = ap.parse_args()
 
@@ -126,15 +132,17 @@ def main() -> int:
         for w in existing["workloads"]:
             assert 0 < int(w["solidity_evm_gas"]) < 32_000_000
             assert int(w["wasm_instructions"]) > 0
+        assert REPORT_MD.read_text(encoding="utf-8") == render_markdown(existing), "gas-comparison-report.md drifted from measured-gas-artifacts.json"
+        assert WEB_BENCH_MJS.read_text(encoding="utf-8") == render_web_mjs(existing), "web/benchmarks.generated.mjs drifted from measured-gas-artifacts.json"
         verify_cross_doc_sync(existing)
         print("[generate-benchmarks] verify-only OK")
         return 0
 
-    if not args.foundry_log or not args.wasmi_json:
+    if not args.foundry_log or not args.analytical_json:
         raise SystemExit("Both --foundry-log AND --wasmi-json are required (strict AND gate)")
 
     gas_map = parse_foundry_gas_log(args.foundry_log.read_text(encoding="utf-8"))
-    wasmi_data = json.loads(args.wasmi_json.read_text(encoding="utf-8"))
+    wasmi_data = json.loads(args.analytical_json.read_text(encoding="utf-8"))
     required_tiers = ("Small", "Medium", "Large", "Stress")
     if not (all(t in gas_map for t in required_tiers) and all(t in wasmi_data["tiers"] for t in required_tiers)):
         raise RuntimeError(f"Missing benchmark tiers: foundry={list(gas_map)} wasmi={list(wasmi_data['tiers'])}")
@@ -176,7 +184,7 @@ def main() -> int:
         )
 
     out_data = {
-        "schema_version": "0.9.0",
+        "schema_version": "1.0.0",
         "calibration_status": "host_replay_analytical_and_foundry_measured",
         "methodology_disclosure": wasmi_data.get("calibration_note", ""),
         "wasm_binary": {

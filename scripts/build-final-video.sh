@@ -8,7 +8,7 @@ fi
 OUT="${2:-$ROOT/docs/assets/demo-final.mp4}"
 LIVE_CLIP="${1:-}"
 
-command -v ffmpeg >/dev/null 2>&1 || { echo "[ERROR] ffmpeg required" >&2; exit 1; }
+command -v ffmpeg 2>"$TMP_DIR/ffmpeg.log" || { cat "$TMP_DIR/ffmpeg.log" >&2; exit 1; } || { echo "[ERROR] ffmpeg required" >&2; exit 1; }
 
 SEG1="$KIT/seg1_hook.mp4"                        # 31.0s (00:00 - 00:31)
 SEG2="$KIT/seg2_workbench.mp4"                   # 59.0s (00:31 - 01:30)
@@ -34,7 +34,7 @@ if [[ -n "$LIVE_CLIP" && -f "$LIVE_CLIP" ]]; then
   echo "[video] Normalizing 32s live screen recording (appended after 25s seg3_bridge -> 57s Scene 3)..."
   ffmpeg -y -i "$LIVE_CLIP" -t 32 -r 60 \
     -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=#0B1020,setsar=1" \
-    -c:v libx264 -profile:v high -level 4.2 -pix_fmt yuv420p -an "$TMP_DIR/live_32s.mp4" >/dev/null 2>&1
+    -c:v libx264 -profile:v high -level 4.2 -pix_fmt yuv420p -an "$TMP_DIR/live_32s.mp4" 2>"$TMP_DIR/ffmpeg.log" || { cat "$TMP_DIR/ffmpeg.log" >&2; exit 1; }
   LIVE_SEG="$TMP_DIR/live_32s.mp4"
 elif [[ -f "$SEG3_LIVE_FALLBACK" ]]; then
   echo "[video] Using cloud-rendered 32s interactive fallback clip (no live clip supplied)..."
@@ -70,6 +70,6 @@ ffmpeg -y -f concat -safe 0 -i "$TMP_DIR/concat.txt" -i "$AUDIO" -i "$SUBS_SRT" 
   -c:v libx264 -profile:v high -level 4.2 -crf 18 -preset medium -pix_fmt yuv420p -r 60 \
   "${AUDIO_ARGS[@]}" \
   -c:s mov_text -metadata:s:s:0 language=eng \
-  -movflags +faststart "$OUT" >/dev/null 2>&1
+  -movflags +faststart "$OUT" 2>"$TMP_DIR/ffmpeg.log" || { cat "$TMP_DIR/ffmpeg.log" >&2; exit 1; }
 
 echo "[video] Built $OUT successfully."

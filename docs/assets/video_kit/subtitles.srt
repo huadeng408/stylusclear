@@ -10,13 +10,13 @@ quickly saturate standard EVM execution.
 
 3
 00:00:11,500 --> 00:00:17,500
-StylusClear v0.8.0 solves this in no_std
+StylusClear v1.0.0 solves this in no_std
 Rust compiled for Arbitrum Stylus.
 
 4
 00:00:17,500 --> 00:00:24,500
-Zero-patch WASM 1.0 MVP: 24,527 B Brotli-q11
-(below 24 KB legacy & 96 KB ArbOS 61 caps).
+Zero-patch WASM 1.0 MVP: 24,501 B Brotli-q11
+(71 B below 24 KiB legacy & 96 KB ArbOS 61 caps).
 
 5
 00:00:24,500 --> 00:00:30,600
@@ -71,7 +71,7 @@ and Robinhood Chain Testnet (46630).
 15
 00:01:37,000 --> 00:01:45,000
 Payable StylusAtomicFactory binds CREATE2
-salt to caller + admin to stop front-running.
+salt to caller + admin under strict CEI.
 
 16
 00:01:45,000 --> 00:01:53,000
@@ -81,12 +81,12 @@ via ArbWasm (0x71), and initializes atomically.
 17
 00:01:53,000 --> 00:02:01,000
 Strict ERC-20 balance-delta checks guard
-every deposit, withdraw, and debt repayment.
+every deposit, withdraw, and fee sweep.
 
 18
 00:02:01,000 --> 00:02:09,000
-Stylus storage cache flushes before every
-external contract call for state safety.
+Identical read-only reentrancy guards across
+all 37 ABI methods and 19 custom errors.
 
 19
 00:02:09,000 --> 00:02:18,000
@@ -95,8 +95,8 @@ works directly from workbench or CLI.
 
 20
 00:02:18,000 --> 00:02:26,500
-Inspect live on-chain settlement receipts
-and verified contracts on the block explorer.
+Run one-click dual-chain deploy to populate
+live receipts on Arbiscan & Robinhood Explorer.
 
 21
 00:02:27,200 --> 00:02:35,000
@@ -105,8 +105,8 @@ eliminated cycles on both Foundry & Rust.
 
 22
 00:02:35,000 --> 00:02:43,500
-Stress tier drops from 18.29M cold EVM gas
-to 1.97M Stylus gas: -89.2% (9.26x savings).
+Stress tier drops from 18.28M cold EVM gas
+to 2.26M Stylus est.: -87.7% (8.10x savings).
 
 23
 00:02:43,500 --> 00:02:51,000
@@ -116,14 +116,14 @@ gas cap under EIP-2929 vm.cool() cold slots.
 24
 00:02:51,000 --> 00:02:59,500
 6/6 Z3 SMT theorems PROVED_UNSAT + 100/100
-matched-auction Hypothesis fuzz runs.
+Hypothesis fuzz runs cross-checked vs Rust CLI.
 
 25
 00:02:59,500 --> 00:03:06,500
-Cross-checked against clearing-cli + 15/15
-Foundry, 8/8 Cargo, and 5/5 Pytest gates.
+16/16 Foundry, 8/8 Cargo (0 clippy), 7/7
+Pytest, and 37-method Seam S3 gates passing.
 
 26
 00:03:06,500 --> 00:03:12,600
-StylusClear v0.8.0 — reproducible verification
+StylusClear v1.0.0 — 5-stage verification
 in under 20 seconds via verify-judge-60s.sh.

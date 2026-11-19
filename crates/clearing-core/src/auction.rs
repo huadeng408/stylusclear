@@ -153,8 +153,11 @@ fn allocate_side_fills(
     let mut rem_units = U256::ZERO;
     usub_ref(&target_units, &allocated_units, &mut rem_units)?;
     if !rem_units.is_zero() {
-        let mut order = [0u8; 128];
         let n_el = eligible_pos.len();
+        if n_el > 128 {
+            return Err(ClearingError::BatchCapacityExceeded);
+        }
+        let mut order = [0u8; 128];
         for (idx_o, slot_o) in order.iter_mut().take(n_el).enumerate() {
             *slot_o = idx_o as u8;
         }

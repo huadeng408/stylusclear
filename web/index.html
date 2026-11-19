@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>StylusClear v0.8.0 — Multilateral Clearing & Margin Workbench</title>
+  <title>StylusClear v1.0.0 — Multilateral Clearing & Margin Workbench</title>
   <style>
     :root {
       --bg: #070b14;
@@ -78,25 +78,32 @@
     }
     .guard-banner.visible { display: flex; justify-content: space-between; align-items: center; }
     .mono { font-family: "JetBrains Mono", "Fira Code", monospace; }
+    button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+    @media (max-width: 900px) {
+      header, .controls-bar { flex-direction: column; align-items: stretch; }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .main-grid { grid-template-columns: 1fr; }
+      table { display: block; overflow-x: auto; }
+    }
   </style>
 </head>
 <body>
   <header>
     <div>
       <div class="brand">
-        <h1>StylusClear v0.8.0</h1>
-        <span class="badge">WASM 1.0 MVP · 24,527 B Brotli</span>
-        <span class="badge green" id="z3Badge">Z3 6/6 UNSAT Proven</span>
+        <h1>StylusClear v1.0.0</h1>
+        <span class="badge">WASM 1.0 MVP · 24,501 B Brotli-q11</span>
+        <span class="badge green" id="z3Badge">Z3 6/6 UNSAT · 100/100 CLI Fuzz</span>
       </div>
       <div class="subtitle">Solverless Multilateral Obligation Compression + 512-Bit UCPBA + Adaptive Floor Liquidation</div>
     </div>
     <div style="display:flex; gap:8px; align-items:center;">
       <span class="badge" id="chainBadge">Arbitrum Sepolia (421614)</span>
-      <span class="badge green" id="statusBadge">SETTLED · ATOMIC</span>
+      <span class="badge green" id="statusBadge" aria-live="polite">SETTLED · ATOMIC</span>
     </div>
   </header>
 
-  <div id="guardBanner" class="guard-banner">
+  <div id="guardBanner" class="guard-banner" role="alert">
     <div>
       <strong>FAIL-CLOSED GUARD TRIGGERED:</strong>
       <span id="guardErrorName" class="mono">LimitPriceViolated</span> —
@@ -149,12 +156,12 @@
     </div>
     <div class="kpi">
       <div class="k-label">Stylus WASM Binary</div>
-      <div class="k-val" id="kpiWasm">24,527 B</div>
-      <div class="k-sub">Brotli-q11 (&lt; 24 KB &amp; 96 KB ArbOS 61)</div>
+      <div class="k-val" id="kpiWasm">24,501 B</div>
+      <div class="k-sub">Brotli-q11 (&lt; 24 KiB &amp; 96 KB ArbOS 61)</div>
     </div>
     <div class="kpi">
       <div class="k-label">Stress Gas (44 Desks)</div>
-      <div class="k-val" id="kpiGasCompare">1.97M vs 18.29M</div>
+      <div class="k-val" id="kpiGasCompare">2.26M vs 18.28M</div>
       <div class="k-sub" id="kpiSpeedup">Stylus vs Cold EVM (&lt;32M Block Cap)</div>
     </div>
   </section>
@@ -165,7 +172,7 @@
         <span>Canonical 2-Origin BFS Obligation Mesh</span>
         <span class="mono" style="font-size:11px;color:var(--cyan);" id="meshSummaryBadge">4 Nodes · Unique Rank IDs</span>
       </h2>
-      <svg id="meshSvg" viewBox="0 0 460 250" style="width:100%;height:245px;background:#080e1c;border-radius:8px;border:1px solid #182542;"></svg>
+      <svg id="meshSvg" role="img" aria-label="Canonical 2-Origin BFS Multilateral Obligation Mesh" viewBox="0 0 460 250" style="width:100%;height:245px;background:#080e1c;border-radius:8px;border:1px solid #182542;"></svg>
     </div>
 
     <div class="card">
@@ -387,8 +394,10 @@
     }
 
     const params = new URLSearchParams(window.location.search);
-    const initScenario = params.get("scenario") || "institutionalMesh";
-    const initDesks = Number(params.get("desks") || "4");
+    const rawScenario = params.get("scenario") || "institutionalMesh";
+    const initScenario = Object.prototype.hasOwnProperty.call(PRESET_SCENARIOS, rawScenario) ? rawScenario : "institutionalMesh";
+    const rawDesks = Number(params.get("desks") || "4");
+    const initDesks = Number.isFinite(rawDesks) && rawDesks >= 4 && rawDesks <= 64 ? rawDesks : 4;
     document.getElementById("scenarioSelect").value = initScenario;
     document.getElementById("deskSlider").value = String(initDesks);
 
@@ -413,10 +422,22 @@
           return;
         }
         const payload = buildLiveScenarioPayloads(scenarioId, cfg);
-        const target = cfg.stylusEngineAddress || cfg.solidityBenchmarkAddress;
         const { simulateSettleBatchKeyless } = await import("./dist/rpc-client.mjs");
-        const rpcRes = await simulateSettleBatchKeyless({ rpcUrl: cfg.rpcUrl, engineAddress: target, ...payload });
-        badge.textContent = rpcRes.ok ? "LIVE RPC PARITY · SETTLED" : `LIVE RPC REVERT · ${rpcRes.errorName || "GUARDED"}`;
+        const targets = [
+          cfg.stylusEngineAddress ? { vm: "Stylus", addr: cfg.stylusEngineAddress } : null,
+          cfg.solidityBenchmarkAddress ? { vm: "Solidity", addr: cfg.solidityBenchmarkAddress } : null,
+        ].filter(Boolean);
+        const results = await Promise.all(
+          targets.map((t) => simulateSettleBatchKeyless({ rpcUrl: cfg.rpcUrl, engineAddress: t.addr, ...payload }))
+        );
+        const first = results[0];
+        const dualMatch = results.length < 2 || (results[0].ok === results[1].ok && results[0].errorName === results[1].errorName);
+        badge.className = first.ok && dualMatch ? "badge green" : "badge red";
+        badge.textContent = !dualMatch
+          ? "LIVE DUAL-VM MISMATCH"
+          : first.ok
+            ? `LIVE ${results.length === 2 ? "DUAL-VM" : "RPC"} PARITY · SETTLED`
+            : `LIVE ${results.length === 2 ? "DUAL-VM" : "RPC"} REVERT · ${first.errorName || "GUARDED"}`;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         badge.textContent = window.location.protocol === "file:"

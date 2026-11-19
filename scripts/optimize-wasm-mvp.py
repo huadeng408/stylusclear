@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -36,7 +37,7 @@ def brotli_q11_size(data: bytes) -> int:
         if b_cli:
             proc = subprocess.run([b_cli, "-q", "11", "-c"], input=data, capture_output=True, check=True)
             return len(proc.stdout)
-        raise RuntimeError("Python 'brotli' module or 'brotli' CLI required")
+        raise RuntimeError("Python 'brotli' module or 'brotli' CLI required") from None
 
 
 def optimize_to_mvp(src: Path, dst: Path) -> dict:
@@ -82,7 +83,7 @@ def optimize_to_mvp(src: Path, dst: Path) -> dict:
         "wasm_brotli_q11_bytes": b_len,
         "wasm_brotli_with_header_bytes": b_len + 4,
         "legacy_24kb_headroom_bytes": 24_576 - (b_len + 4),
-        "arbos61_96kb_headroom_bytes": 98_304 - b_len,
+        "arbos61_96kb_headroom_bytes": 98_304 - (b_len + 4),
         "wasm_sha256": hashlib.sha256(raw).hexdigest(),
         "zero_float_opcodes_verified": zero_float,
         "zero_post_mvp_opcodes_verified": True,
@@ -108,5 +109,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    import re
     raise SystemExit(main())

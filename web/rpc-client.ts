@@ -1,5 +1,5 @@
 /**
- * StylusClear v0.7.0 Dual-Chain JSON-RPC & Keyless Simulation Client
+ * StylusClear v1.0.0 Dual-Chain JSON-RPC & Keyless Simulation Client
  * Supports Arbitrum Sepolia (421614) & Robinhood Chain Testnet (46630) with full 29-method ABI parity.
  */
 import { createPublicClient, decodeErrorResult, encodeFunctionData, http, parseAbi } from "viem";
@@ -61,6 +61,7 @@ export const SETTLEMENT_ENGINE_ABI = parseAbi([
   "function liquidate(address underwater, uint8 debtAsset, uint8 collateralAsset, uint256 repayAmountWad) external returns (uint256 repaidDebtWad, uint256 seizedCollateralWad)",
   "function seedAccountBalance(address trader, uint8 assetId, int256 balanceWad) external",
   "function admin() external view returns (address)",
+  "function benchmarkSeedingEnabled() external view returns (bool)",
   "function permissionlessSolver() external view returns (bool)",
   "function maxPriceStaleness() external view returns (uint64)",
   "function maxPriceDeviationBps() external view returns (uint16)",

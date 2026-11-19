@@ -1,19 +1,19 @@
-# StylusClear (`v0.9.0`) — Competition & Ecosystem Submission Dossier
+# StylusClear v1.0.0 — Hackathon Submission
 
-## Target Tracks & Ecosystem Alignment
-1. **[Arbitrum Mentorship Program Cohort 2](https://blog.arbitrum.foundation/arbitrum-mentorship-program-cohort-2-applications-now-open/)** ([Builder's Block #029](https://blog.arbitrum.foundation/builders-block-029-pitch-to-50-investors-through-the-mentorship-program-compete-for-100k/) — `$100,000` prize pool + 50+ investor Demo Day, application deadline `2026-12-06`, co-hosted with Robinhood Chain).
-2. **[Arbitrum Open House São Paulo: Online Buildathon](https://www.hackquest.io/zh-cn/hackathons/Arbitrum-Open-House-Sao-Paulo-Online-Buildathon)** ([Arbitrum Open House Portal](https://openhouse.arbitrum.io/) / [EarnKit Program Listing](https://earnkit.com/programs/arbitrum-open-house-sao-paulo) — `$115,000 USDC/USDG` pool, including dedicated top-tier placement consideration for projects deployed on [Robinhood Chain Testnet (`46630`)](https://docs.robinhood.com/chain/connecting/)).
+* **Track**: Arbitrum Stylus / Institutional DeFi & Robinhood Chain (`46630` USDG + `NVDAx` RWA Clearing) — [Arbitrum Open House / Buildathon](https://arbitrum.foundation/)
+* **Repository Version**: `v1.0.0` (Dual-VM `no_std` Rust Stylus WASM 1.0 MVP + Bit-Exact Solidity Reference)
+* **Deployment Status**: `Pending Local Broadcast (Zero-Mock)` — `deployments/arbitrum-sepolia.json` (`421614`) and `deployments/robinhood-testnet.json` (`46630`) are auto-populated with verified contract addresses and transaction hashes via `scripts/wsl2-oneclick-finish.ps1`.
 
-## Executive Summary
-**StylusClear** is an institutional-grade multilateral obligation cycle compression and 512-bit Uniform Clearing Price Batch Auction (`UCPBA`) clearing house written in `no_std` Rust for [Arbitrum Stylus](https://docs.arbitrum.io/stylus/concepts/webassembly). It solves sequential collateral lockups across `USDC`/`USDG` ([Arbitrum Stablecoin Growth Program](https://blog.arbitrum.io/stablecoin-growth-program/)), `WETH`, `ARB`, and tokenized equities (`NVDAx`) by compressing directed payable cycles via an `O(V²)` 2-Origin BFS algorithm before clearing net residual liquidity in a single uniform-price call auction.
+## Problem Statement
 
-## Key Technical Differentiators (`v0.9.0`)
-* **AIP-31605 Reproducible WASM 1.0 MVP (`24,527 B` Brotli-q11)**: Built strictly with official Binaryen `wasm-opt` lowering passes (`0` floating-point ops, `0` post-MVP ops, `0` custom section mutations), fitting comfortably inside both the legacy `24,576 B` [Stylus VM cap](https://docs.arbitrum.io/stylus/concepts/vm-differences) and [`ArbOS 61`](https://docs.arbitrum.io/run-a-node/arbos-releases/arbos61)'s `96 KB` cap, paired with `StylusAtomicFactory.sol` for front-run-proof atomic initialization.
-* **6.98x Stress-Tier Gas Advantage (`-85.7%` Gas) Under Conservative Cold Storage (`optimizer_runs = 200`)**: On an isomorphic 44-desk, 88-obligation, 45-cycle, 88-intent stress batch under EIP-2929 `vm.cool()` cold storage (`solc 0.8.38`, `via_ir = true`, `optimizer_runs = 200`), Solidity consumes `18,284,070` gas (within Arbitrum's `32,000,000` single-block limit in [Chain Params](https://docs.arbitrum.io/arbitrum-essentials/reference/chain-params)) whereas StylusClear's offline analytical HostIO model (anchored to host-verified Rust replay and charging all 8 config cold SLOADs, all 88 `get_partial_fill` cold SLOADs, conservative 5,000-gas SSTOREs, and `memory_grow`) totals `2,617,806` gas (`136,990,000` analytical WASM ops — **`6.98x` cheaper**, pending live Arbitrum Sepolia `eth_estimateGas`/`evm_ink_left()` confirmation).
-* **6 Z3 SMT Formal Proofs + 6-Endpoint Differential Parity**: Every invariant—adaptive zero-deadlock `USDC/USDG` liquidation (`min(mm_bps / 2, 250)`), floor proportional collateral cap, 512-bit per-lot Individual Rationality, double-entry conservation, physical ERC-20 vault solvency, and sub-quantum debt closure—is proved `UNSAT` in `tools/formal/prove_invariants_z3.py` and fuzz-tested across Rust, Stylus WASM, Solidity, Python, CLI, and the Web Workbench.
-* **Dual-Chain Arbitrum Sepolia (`421614`) + Robinhood Chain Testnet (`46630`) Support**: Turnkey deployment scripts (`deploy-sepolia.sh`, `deploy-robinhood-testnet.sh`) and keyless browser `eth_call` simulation across all 4 asset slots (`USDC/USDG`, `WETH`, `ARB`, `NVDAx`).
+Institutional OTC desks, prime brokers, and tokenized-equity venues (`NVDAx`, `USDG`, `WETH`, `ARB`) face severe capital fragmentation and on-chain compute bottlenecks when settling multilateral obligations alongside batch auctions. Executing `O(V²)` graph cycle compression, 512-bit Uniform Clearing Price Batch Auctions (UCPBA), and multi-asset margin invariants in pure Solidity EVM hits steep gas costs (`18.28M` gas at 44 desks / 88 intents under cold storage).
 
-## Judge 15-Second Verification
-```bash
-bash scripts/verify-judge-60s.sh
-```
+## Solution: StylusClear v1.0.0
+
+StylusClear moves the compute-heavy clearing core into **Arbitrum Stylus (`no_std` Rust → WASM 1.0 MVP)** while maintaining 100% bit-exact parity (`37` ABI methods, `19` custom errors, identical read-only reentrancy guards) with `SolidityClearingBenchmark.sol`:
+
+* **Zero-Patch WASM 1.0 MVP**: `65,673 B` raw / **`24,501 B` Brotli-q11** (`24,505 B` incl. 4 B header — `71 B` below the `24,576 B` legacy cap, `73,799 B` below `ArbOS 61` `96 KB` cap; `0` float / `0` post-MVP opcodes).
+* **Cold-Storage Gas Advantage (`optimizer_runs = 200`, `vm.cool()`)**: `2.26x` (Small, `-55.7%`), `3.93x` (Medium, `-74.5%`), `6.42x` (Large, `-84.4%`), and **`8.10x` (Stress: `2,256,292` vs `18,284,228` gas, `-87.7%`)** under complete EIP-2929 HostIO modeling (`docs/benchmarks/gas-comparison-report.md`).
+* **Formal Verification (`docs/security/z3-formal-proofs.json`)**: **6/6 Z3 SMT theorems `PROVED_UNSAT`** (T1 `T1_U256_Adaptive_Bonus_Zero_Deadlock`, T2 `T2_Floor_Proportional_Cap_Bound`, T3 `T3_UCPBA_Individual_Rationality_And_Bounded_Dust`, T4 `T4_FullDomain_U512_FullMath_Overflow_And_Carry_Guard`, T5 `T5_U256_MultiDecimal_Vault_Solvency`, T6 `T6_BitVec256_SubQuantum_Debt_Exit_Guarantee`) + **100/100 EIP-712 Hypothesis differential cases** verified bit-for-bit against the compiled Rust `clearing-cli` binary (`cli_replay_cross_checked: true`).
+* **5-Stage Verification (`< 20s`)**: Run `bash scripts/verify-judge-60s.sh` to independently verify `archcheck --strict`, `wasm-opt --mvp-features`, Rust (`8/8`), Foundry (`16/16`, `2x256` fuzz), Z3 (`6/6`), Python Seam S1/S2/S4 (`7/7`), and Node Seam S3 (`37-method ABI`, real `0xcf36836c` calldata decoding).
+* **Demo Video**: [`docs/assets/demo-preview.mp4`](docs/assets/demo-preview.mp4) (`1920x1080 @ 60fps`, `193.0s`, burned-in ASS subtitles + `mov_text`, see [`docs/DEMO_VIDEO_SCRIPT.md`](docs/DEMO_VIDEO_SCRIPT.md)).

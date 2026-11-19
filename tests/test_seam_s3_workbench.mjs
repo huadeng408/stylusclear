@@ -1,5 +1,5 @@
 /**
- * Seam S3 Workbench & Keyless JSON-RPC Dual-Chain Test Suite (v0.7.0)
+ * Seam S3 Workbench & Keyless JSON-RPC Dual-Chain Test Suite (v1.0.0)
  */
 import assert from "node:assert/strict";
 import http from "node:http";
@@ -18,9 +18,9 @@ import {
 } from "../web/engine-ui.mjs";
 
 async function main() {
-  // 1) Verify 29 functions in SETTLEMENT_ENGINE_ABI (including liquidate, repaySubQuantumDebt, absorbBadDebt, getVaultPhysicalRaw)
+  // 1) Verify 37 functions in SETTLEMENT_ENGINE_ABI (including liquidate, repaySubQuantumDebt, absorbBadDebt, getVaultPhysicalRaw)
   const fnNames = SETTLEMENT_ENGINE_ABI.filter((x) => x.type === "function").map((x) => x.name);
-  assert.equal(fnNames.length, 36, `Expected 36 ABI functions, got ${fnNames.length}`);
+  assert.equal(fnNames.length, 37, `Expected 37 ABI functions, got ${fnNames.length}`);
   for (const req of ["liquidate", "repaySubQuantumDebt", "absorbBadDebt", "getVaultPhysicalRaw", "settleBatch"]) {
     assert.ok(fnNames.includes(req), `Missing ABI method ${req}`);
   }
@@ -91,6 +91,7 @@ async function main() {
         return reply("0x493e0");
       }
       if (rpc.method === "eth_call") {
+        assert.ok(typeof rpc.params?.[0]?.data === "string" && rpc.params[0].data.startsWith("0xcf36836c"), "eth_call must encode settleBatch selector 0xcf36836c");
         if (activeMode === "oracleBandGuard") return replyErr("LimitPriceViolated");
         if (activeMode === "marginShortfallGuard") return replyErr("InsufficientInitialMargin");
         const cyc = (2n).toString(16).padStart(64, "0");
@@ -128,7 +129,7 @@ async function main() {
   } finally {
     server.close();
   }
-  console.log("[seam-s3] OK (29-method ABI, 4-asset NVDAx, <5ms 64-desk mesh, keyless dual-chain 421614/46630)");
+  console.log("[seam-s3] OK (37-method ABI, 4-asset NVDAx, <5ms 64-desk mesh, keyless dual-chain 421614/46630)");
 }
 
 main().catch((err) => {

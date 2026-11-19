@@ -10,6 +10,7 @@ interface Vm {
     function addr(uint256 privateKey) external returns (address);
     function prank(address caller) external;
     function warp(uint256 newTimestamp) external;
+    function deal(address who, uint256 newBalance) external;
     function chainId(uint256 newChainId) external;
     function etch(address target, bytes calldata newRuntimeBytecode) external;
     function cool(address target) external;
@@ -721,6 +722,65 @@ contract ClearingDifferentialTest {
         uint256 absorbed = sim.absorbBadDebt(leaf, 1);
         require(absorbed == 1 * WAD && sim.getAccountBalance(leaf, 1) == 0, "absorbBadDebt failed");
     }
+
+    function testV10_FactoryArbWasmRefundSubQuantumRepayAndGuards() public {
+        vm.warp(1_000_000);
+        StylusAtomicFactory factory = new StylusAtomicFactory();
+        bytes memory initCode = abi.encodePacked(
+            type(SolidityClearingBenchmark).creationCode,
+            abi.encode(address(0), false)
+        );
+        vm.deal(address(this), 1 ether);
+        uint256 balBefore = address(this).balance;
+        address deployed = factory.deployAndInitialize{value: 0.25 ether}(
+            initCode,
+            keccak256("v10-refund"),
+            address(this),
+            true
+        );
+        require(address(this).balance == balBefore, "excess ETH must be refunded");
+        SolidityClearingBenchmark eng = SolidityClearingBenchmark(deployed);
+        require(eng.benchmarkSeedingEnabled(), "benchmarkSeedingEnabled must be true");
+
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        eng.configureAsset(0, address(usdc), 6, 1 * WAD, 0, 1000, 500);
+        vm.expectRevert(ISettlementEngine.InvalidAssetConfig.selector);
+        eng.configureAsset(0, address(usdc), 6, 11 * WAD / 10, 0, 1000, 500);
+
+        eng.configureAsset(1, address(0), 18, 2000 * WAD, 1000, 1500, 750);
+        vm.expectRevert(ISettlementEngine.InvalidAssetConfig.selector);
+        eng.seedAccountBalance(address(0), 1, int256(1 * WAD));
+
+        eng.setRiskWindows(7200, 1500, false);
+        require(eng.maxPriceStaleness() == 7200 && eng.maxPriceDeviationBps() == 1500 && !eng.permissionlessSolver(), "risk windows mismatch");
+        address solver2 = address(0x5011);
+        eng.setApprovedSolver(solver2, true);
+        require(eng.approvedSolvers(solver2), "solver2 should be approved");
+        eng.setApprovedSolver(solver2, false);
+        require(!eng.approvedSolvers(solver2), "solver2 should be revoked");
+
+        address cred = address(0xC0ED);
+        uint256 totalOb = eng.registerObligation(cred, 0, 10 * WAD);
+        require(totalOb == 10 * WAD, "registerObligation mismatch");
+        uint256 remOb = eng.revokeObligation(cred, 0, 4 * WAD);
+        require(remOb == 6 * WAD && eng.getConfirmedObligation(address(this), cred, 0) == 6 * WAD, "revokeObligation mismatch");
+
+        // Dust full-debt liquidation clearance (< 1e9 wei 18-dec debt while underwater from another debt)
+        address uw = address(0xD057);
+        address liq = address(0x1100);
+        eng.configureAsset(2, address(0), 18, 1 * WAD, 0, 1000, 500);
+        eng.configureAsset(3, address(0), 18, 1 * WAD, 0, 1000, 500);
+        eng.seedAccountBalance(uw, 1, -int256(500_000_000)); // -5e8 wei WETH ($1e-6)
+        eng.seedAccountBalance(uw, 2, int256(5_000_000_000_000)); // +5e12 wei ($5e-6 collateral)
+        eng.seedAccountBalance(uw, 3, -int256(10_000_000_000_000)); // -$10e-6 other debt -> underwater
+        eng.seedAccountBalance(liq, 1, int256(1 * WAD));
+        eng.seedAccountBalance(liq, 2, int256(100 * WAD));
+        vm.prank(liq);
+        (uint256 rep, uint256 sz) = eng.liquidate(uw, 1, 2, 1 * WAD);
+        require(rep == 500_000_000 && sz > 0 && eng.getAccountBalance(uw, 1) == 0, "dust full-debt liquidation must clear debt");
+    }
+
+    receive() external payable {}
 }
 
 /// @title ClearingBenchmarkGas

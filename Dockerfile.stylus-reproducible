@@ -9,11 +9,12 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.91.0 --profile minimal \
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.91.0 --profile minimal --component rustfmt --component clippy \
     && rustup target add wasm32-unknown-unknown
 
 WORKDIR /workspace
 COPY Cargo.toml Cargo.lock Stylus.toml rust-toolchain.toml ./
+COPY .cargo ./.cargo
 COPY crates ./crates
 COPY scripts/optimize-wasm-mvp.py ./scripts/optimize-wasm-mvp.py
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproducible isomorphic workload generator & Stylus WASM gas/ink estimator (v0.8.0).
+"""Reproducible isomorphic workload generator & Stylus WASM gas/ink estimator (v1.0.0).
 
 Constructs the EXACT SAME 4 multi-cycle chord + crossed-orderbook workloads as
 `ClearingBenchmarkGas._runWorkload` in `contracts/test/ClearingDifferential.t.sol`
@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.ref_sim.crypto_eip712 import compute_intent_digest, keccak256
+from tools.ref_sim.crypto_eip712 import compute_intent_digest, keccak256  # noqa: E402
 
 WAD = 10**18
 _P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
@@ -182,23 +182,31 @@ def estimate_stylus_metrics(n_acc: int, n_obs: int, cycles: int, n_int: int) -> 
     compute_gas = (compute_ink + 9_999) // 10_000
 
     cold_sloads = 8 + 2 * n_acc + n_obs + n_acc + n_int
-    warm_sstores = 1 + 2 * n_acc + n_obs + n_acc + n_int
+    warm_sloads = 3 * n_acc
+    # Full-fill orders with prior_fill == 0 skip partial-fill SSTORE (clearing-stylus/src/lib.rs:1429-1430)
+    warm_sstores = 1 + 2 * n_acc + n_obs + n_acc
     keccak_calls = 3 * n_acc + n_obs + 3 * n_int
-    hostio_calls = cold_sloads + warm_sstores + keccak_calls + n_int + 4
-    memory_grow_gas = 4_096
+    hostio_calls = cold_sloads + warm_sloads + warm_sstores + keccak_calls + n_int * 2 + 4
     l2_calldata_bytes = 64 * n_acc + 160 * n_obs + 720 * n_int
     l2_calldata_gas_shared = l2_calldata_bytes * 10
+    memory_grow_pages = max(2, (l2_calldata_bytes + 32_768) // 65_536 + 1)
+    memory_grow_gas = memory_grow_pages * 2_048
+    # Exact EVM log pricing: MarketCleared + BatchTelemetry + BatchSettled
+    event_log_gas = (375 + 375 * 2 + 8 * 96) + (375 + 375 * 3 + 8 * 128) + (375 + 375 * 2 + 8 * 64)
+    # ecrecover precompile (3,000) + static_call(0x01) & storage_flush_cache HostIO overhead (700)
+    ecrecover_hostio_gas = n_int * 3_700
 
     hostio_storage_gas = (
         21_000
         + 352
         + memory_grow_gas
         + cold_sloads * 2_100
+        + warm_sloads * 100
         + warm_sstores * 5_000
-        + n_int * 3_000
+        + ecrecover_hostio_gas
         + keccak_calls * 36
         + int(hostio_calls * 1)
-        + 2_500
+        + event_log_gas
     )
     total_gas = compute_gas + hostio_storage_gas
     total_ink = total_gas * 10_000
@@ -209,8 +217,11 @@ def estimate_stylus_metrics(n_acc: int, n_obs: int, cycles: int, n_int: int) -> 
         "intents": n_int,
         "wasm_instructions": wasm_instructions,
         "cold_sloads": cold_sloads,
+        "warm_sloads": warm_sloads,
         "warm_sstores": warm_sstores,
+        "memory_grow_pages": memory_grow_pages,
         "memory_grow_gas": memory_grow_gas,
+        "event_log_gas": event_log_gas,
         "l2_calldata_bytes": l2_calldata_bytes,
         "l2_calldata_gas_shared_both_vms": l2_calldata_gas_shared,
         "hostio_calls": hostio_calls,

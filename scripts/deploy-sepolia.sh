@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# StylusClear v0.9.0 Atomic Deployment Script (Arbitrum Sepolia — Chain ID 421614)
+# StylusClear v1.0.0 Atomic Deployment Script (Arbitrum Sepolia — Chain ID 421614)
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
@@ -13,8 +13,8 @@ fi
 RPC_URL="${RPC_URL:-${SEPOLIA_RPC_URL:-https://sepolia-rollup.arbitrum.io/rpc}}"
 CHAIN_ID_EXPECTED="${CHAIN_ID_EXPECTED:-421614}"
 WASM_FILE="$ROOT_DIR/artifacts/clearing_stylus.wasm"
-DEPLOY_JSON="$ROOT_DIR/deployments/arbitrum-sepolia.json"
-WEB_DEPLOY_JSON="$ROOT_DIR/web/deployments/arbitrum-sepolia.json"
+DEPLOY_JSON="$ROOT_DIR/deployments/${DEPLOY_OUT_NAME:-arbitrum-sepolia.json}"
+WEB_DEPLOY_JSON="$ROOT_DIR/web/deployments/${DEPLOY_OUT_NAME:-arbitrum-sepolia.json}"
 
 if [[ -z "${PRIVATE_KEY:-}" ]]; then
   echo "[deploy] ERROR: Set PRIVATE_KEY environment variable before broadcasting." >&2
@@ -56,6 +56,7 @@ cast send "$SOL_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint1
 cast send "$SOL_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 2 "$TOK2" 18 1000000000000000000 1000 1200 600 --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY" >/dev/null
 cast send "$SOL_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 3 "$TOK3" 18 140000000000000000000 1000 1200 600 --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY" >/dev/null
 
+REQUIRE_STYLUS="${REQUIRE_STYLUS:-1}"
 STYLUS_ENGINE=""
 if command -v cargo-stylus >/dev/null 2>&1 || cargo stylus --version >/dev/null 2>&1; then
   echo "[deploy] Deploying pre-optimized WASM ($WASM_FILE) via cargo stylus --wasm-file..."
@@ -64,7 +65,11 @@ if command -v cargo-stylus >/dev/null 2>&1 || cargo stylus --version >/dev/null 
   if [[ -z "$STYLUS_ENGINE" ]]; then
     STYLUS_ENGINE="$(printf '%s\n' "$STYLUS_OUT" | grep -Eo '\b0x[0-9a-fA-F]{40}\b' | head -n 1 || true)"
   fi
-  if [[ -n "$STYLUS_ENGINE" ]]; then
+  if [[ -z "$STYLUS_ENGINE" && "$REQUIRE_STYLUS" == "1" ]]; then
+  echo "[ERROR] Failed to parse deployed Stylus engine address from cargo stylus deploy output" >&2
+  exit 1
+fi
+if [[ -n "$STYLUS_ENGINE" ]]; then
     cast send "$STYLUS_ENGINE" "initialize(address,bool)" "$DEPLOYER_ADDR" false --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY" >/dev/null
     cast send "$STYLUS_ENGINE" "setRiskWindows(uint64,uint16,bool)" 3600 2000 true --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY" >/dev/null
     cast send "$STYLUS_ENGINE" "setApprovedSolver(address,bool)" "$DEPLOYER_ADDR" true --rpc-url "$RPC_URL" --private-key "$PRIVATE_KEY" >/dev/null

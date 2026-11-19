@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# StylusClear v0.9.0 Fast Judge Verification (< 20 seconds)
+# StylusClear v1.0.0 Fast Judge Verification (< 20 seconds)
 START_TS="$(date +%s)"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -25,7 +25,7 @@ python3 scripts/generate-benchmarks.py --verify-only
 
 echo "=== [2/5] Rust Core & Stylus Unit Tests ==="
 OFFLINE_ARG=()
-if [[ -n "${OFFLINE_CRATES_VENDOR:-}" || -f "$ROOT_DIR/.cargo/config.toml" ]]; then OFFLINE_ARG=(--offline); fi
+if [[ -n "${OFFLINE_CRATES_VENDOR:-}" && -d "${OFFLINE_CRATES_VENDOR}" ]]; then OFFLINE_ARG=(--offline); fi
 cargo test "${CARGO_VENDOR_OPTS[@]}" --locked "${OFFLINE_ARG[@]}" --workspace --quiet
 
 echo "=== [3/5] Foundry Differential & Cold-Storage Gas Suite ==="
@@ -48,6 +48,9 @@ if [[ -d "$HOME/.cache/stylusclear_entity_sandbox/06_node_ts_cloud_sdks/node_pkg
     ln -s "$HOME/.cache/stylusclear_entity_sandbox/06_node_ts_cloud_sdks/node_pkgs/node_modules" "$ROOT_DIR/web/node_modules"
     CLEAN_WEB_NM=1
   fi
+elif [[ -d "$ROOT_DIR/web/node_modules" && ! -e "$ROOT_DIR/node_modules" ]]; then
+  ln -s "$ROOT_DIR/web/node_modules" "$ROOT_DIR/node_modules"
+  CLEAN_ROOT_NM=1
 fi
 cleanup_nm() {
   if [[ "$CLEAN_ROOT_NM" -eq 1 && -L "$ROOT_DIR/node_modules" ]]; then rm -f "$ROOT_DIR/node_modules"; fi

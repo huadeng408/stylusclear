@@ -1,10 +1,10 @@
-# StylusClear Dual-Track Deployment Architecture: Arbitrum Sepolia + Institutional Orbit L3 Appchain (v0.5)
+# StylusClear Dual-Track Deployment Architecture: Arbitrum Sepolia + Institutional Orbit L3 Appchain (v1.0.0)
 
 ## 1. Strategic Context: Navigating the October 2026 Stylus Pause & Constitutional AIP-31605
 
 Following the October 2, 2026 [Stylus Activation Pause Notice](https://docs.arbitrum.io/notices/stylus-activation-pause-notice) ([Security Council Emergency Action](https://forum.arbitrum.foundation/t/security-council-emergency-action-2-10-2026/31530)) and the October 23, 2026 [[Constitutional] AIP: Stylus Activation Contract](https://forum.arbitrum.foundation/t/constitutional-aip-stylus-activation-contract/31605), Arbitrum's Stylus deployment landscape operates across three tiers:
 
-1. **Arbitrum Sepolia (`chainId: 421614`)**: Full permissionless `cargo stylus deploy` and [`ArbWasm` (`0x...0071`)](https://docs.arbitrum.io/stylus/concepts/activation) activation for public testnet verification and hackathon evaluation ([Open House Qualification Rules](https://www.hackquest.io/hackathons/Arbitrum-Open-House-India-Online-Buildathon)).
+1. **Arbitrum Sepolia (`chainId: 421614`)**: Full permissionless `cargo stylus deploy` and [`ArbWasm` (`0x...0071`)](https://docs.arbitrum.io/stylus/concepts/activation) activation for public testnet verification and hackathon evaluation ([Open House Qualification Rules](https://www.hackquest.io/hackathons/Arbitrum-Open-House-Arbitrum Open House-Online-Buildathon)).
 2. **Custom Arbitrum Orbit L3 & RWA Chains (including [Robinhood Chain Testnet `46630`](https://docs.robinhood.com/chain/connecting/))**: Independent `ArbOwner` and `ArbWasmCache` precompile governance enabling immediate institutional clearing of tokenized equities and [USDG stablecoins](https://grants.watch/programs/arbitrum-stablecoin-growth-program) with `benchmark_seeding_enabled = false`.
 3. **Arbitrum One (`42161`) via AIP-31605 Wrapper**: `StylusClear` enforces `#![forbid(unsafe_code)]`, strict WASM 1.0 (`-reference-types,-simd128` per [Stylus WebAssembly Spec](https://docs.arbitrum.io/stylus/concepts/webassembly)), `Host::msg_reentrant()` protection ([Stylus Rust SDK Guide](https://docs.arbitrum.io/stylus/reference/rust-sdk-guide)), and reproducible Docker builds (`Dockerfile.stylus-reproducible`), satisfying the technical audit checklist for the [Arbitrum Security Program (ASP)](https://forum.arbitrum.foundation/t/42nd-grc-call-recording-transcript/31589) and AIP-31605 allowlist activation.
 

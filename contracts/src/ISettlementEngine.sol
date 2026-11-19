@@ -120,6 +120,7 @@ interface ISettlementEngine {
     function seedAccountBalance(address trader, uint8 assetId, int256 balanceWad) external;
 
     function admin() external view returns (address);
+    function benchmarkSeedingEnabled() external view returns (bool);
     function permissionlessSolver() external view returns (bool);
     function maxPriceStaleness() external view returns (uint64);
     function maxPriceDeviationBps() external view returns (uint16);

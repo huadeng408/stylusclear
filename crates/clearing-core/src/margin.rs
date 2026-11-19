@@ -52,6 +52,9 @@ pub fn validate_asset_configs_selective(
     block_timestamp: u64,
     max_price_staleness: u64,
 ) -> Result<(), ClearingError> {
+    if assets.len() > 16 {
+        return Err(ClearingError::BatchCapacityExceeded);
+    }
     for (idx, cfg) in assets.iter().enumerate() {
         if usize::from(cfg.asset_id) != idx || cfg.mark_price_wad.is_zero() || cfg.decimals > 18 {
             return Err(ClearingError::InvalidAssetConfig);
@@ -59,7 +62,7 @@ pub fn validate_asset_configs_selective(
         if u64::from(cfg.haircut_bps) >= BPS_DENOM_U64 {
             return Err(ClearingError::InvalidHaircut);
         }
-        if cfg.mm_bps == 0 || cfg.mm_bps > cfg.im_bps || u64::from(cfg.im_bps) > BPS_DENOM_U64 {
+        if cfg.mm_bps < 2 || cfg.mm_bps > cfg.im_bps || u64::from(cfg.im_bps) > BPS_DENOM_U64 {
             return Err(ClearingError::InvalidAssetConfig);
         }
         if (active_mask & (1u16 << idx)) != 0

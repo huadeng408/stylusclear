@@ -93,6 +93,7 @@ const SEL_LIQUIDATE: u32 = 0x4189b0a9; // liquidate(address,uint8,uint8,uint256)
 const SEL_SEED_BAL: u32 = 0xf857677a; // seedAccountBalance(address,uint8,int256)
 const SEL_SETTLE_BATCH: u32 = 0xcf36836c; // settleBatch(address[],(uint16,uint16,uint8,uint8,uint8,uint64,uint256,uint256,bytes32,bytes32)[],(uint16,uint8,uint8,uint8,uint8,uint8,uint64,uint256,uint256,uint256,bytes32,bytes32)[])
 const SEL_ADMIN: u32 = 0xf851a440; // admin()
+const SEL_BENCHMARK_SEEDING: u32 = 0xed80e033; // benchmarkSeedingEnabled()
 const SEL_PERM_SOLVER: u32 = 0x215eb331; // permissionlessSolver()
 const SEL_MAX_STALE: u32 = 0xc80d36b8; // maxPriceStaleness()
 const SEL_MAX_DEV: u32 = 0x79baa1a2; // maxPriceDeviationBps()
@@ -709,9 +710,13 @@ impl StylusClearingEngine {
         if !token.is_zero() && self.vm().account_code_size(token) == 0 {
             return Err(ClearingError::InvalidAssetConfig);
         }
+        let now = self.vm().block_timestamp();
         let existing = self.read_asset(asset_id);
         if existing.init {
             if existing.token != token || existing.cfg.decimals != decimals {
+                return Err(ClearingError::InvalidAssetConfig);
+            }
+            if now <= existing.cfg.price_updated_at && *mark_price_wad != existing.cfg.mark_price_wad {
                 return Err(ClearingError::InvalidAssetConfig);
             }
             Self::check_mark_step(&existing.cfg.mark_price_wad, mark_price_wad)?;
@@ -1087,6 +1092,12 @@ impl StylusClearingEngine {
         if cmp_u256(&v_raw, &raw_amount).is_lt() {
             return Err(ClearingError::InsufficientWithdrawableBalance);
         }
+        let Some(live_b) = self.query_erc20_balance(rec.token, self.vm().contract_address()) else {
+            return Err(ClearingError::InsufficientWithdrawableBalance);
+        };
+        if cmp_u256(&live_b, &raw_amount).is_lt() {
+            return Err(ClearingError::InsufficientWithdrawableBalance);
+        }
         usub_assign(&mut v_raw, &raw_amount)?;
         umul_ref(&raw_amount, &quantum, swept_out)?;
         self.set_fee(asset_id, &rem_wad);
@@ -1228,7 +1239,7 @@ impl StylusClearingEngine {
         if !seeding {
             return Err(ClearingError::UnauthorizedCaller);
         }
-        if asset_id >= cur_count || !self.read_asset(asset_id).token.is_zero() {
+        if trader.is_zero() || asset_id >= cur_count || !self.read_asset(asset_id).token.is_zero() {
             return Err(ClearingError::InvalidAssetConfig);
         }
         self.set_bal(trader, asset_id, bal);
@@ -1844,12 +1855,6 @@ fn dispatch_words(
             Ok(0)
         }
         SEL_SETTLE_BATCH => {
-            storage.check_non_reentrant()?;
-            let caller = storage.vm().msg_sender();
-            let (_, _, permissionless, _, _) = storage.read_header();
-            if !permissionless && !storage.is_solver(caller) {
-                return Err(RouteErr::Clearing(ClearingError::UnauthorizedCaller));
-            }
             let mut c = AbiCursor { buf: input, pos: 0 };
             let (p, o, it) = c.decode_settle_batch()?;
             let cyc = storage.settle_batch_dto(p, &o, &it, &mut u0)?;
@@ -1861,6 +1866,12 @@ fn dispatch_words(
             storage.check_non_reentrant()?;
             let _ = AbiCursor::new_exact(input, 0)?;
             out[0] = word_addr(storage.read_header().0);
+            Ok(1)
+        }
+        SEL_BENCHMARK_SEEDING => {
+            storage.check_non_reentrant()?;
+            let _ = AbiCursor::new_exact(input, 0)?;
+            out[0] = word_bool(storage.read_header().1);
             Ok(1)
         }
         SEL_PERM_SOLVER => {
@@ -2018,6 +2029,7 @@ interface IStylusClearingEngine {
     function seedAccountBalance(address trader, uint8 assetId, int256 balanceWad) external;
     function settleBatch(address[] calldata participants, ObligationInput[] calldata obligations, SignedTradeIntent[] calldata intents) external returns (uint32 cyclesEliminated, uint256 totalMatchedVolumeWad);
     function admin() external view returns (address);
+    function benchmarkSeedingEnabled() external view returns (bool);
     function permissionlessSolver() external view returns (bool);
     function maxPriceStaleness() external view returns (uint64);
     function maxPriceDeviationBps() external view returns (uint16);
@@ -2119,6 +2131,10 @@ mod tests {
 
         vm.set_sender(admin);
         assert!(dispatch(initializeCall { initialAdmin: admin, benchmarkSeedingEnabled: true }.abi_encode()).is_ok());
+        // v1.0.0 P0-1: benchmarkSeedingEnabled() selector 0xed80e033 MUST return true for StylusAtomicFactory
+        let seed_flag = dispatch([0xed, 0x80, 0xe0, 0x33].to_vec()).expect("benchmarkSeedingEnabled");
+        assert_eq!(seed_flag.len(), 32);
+        assert_eq!(seed_flag[31], 1);
 
         // Two-step admin transfer (`D-32`)
         assert!(dispatch(transferAdminCall { newAdmin: next_admin }.abi_encode()).is_ok());
@@ -2264,5 +2280,15 @@ mod tests {
         assert!(dispatch(seedAccountBalanceCall { trader: admin, assetId: 1, balanceWad: I256::try_from(5i64).unwrap() * iwad }.abi_encode()).is_ok());
         let abs_raw = dispatch(absorbBadDebtCall { underwater: leaf, debtAsset: 1 }.abi_encode()).expect("admin backstops bad debt");
         assert_eq!(U256::abi_decode(&abs_raw, true).unwrap(), wad);
+        // v1.0.0 P0-3: configureAsset MUST reject same-block mark price change even within 50% step
+        assert_eq!(
+            dispatch(configureAssetCall { assetId: 2, token: Address::ZERO, decimals: 6, markPriceWad: U256::from(11u64) * wad / U256::from(10u64), haircutBps: 0, imBps: 500, mmBps: 250 }.abi_encode()),
+            Err(InvalidAssetConfig {}.abi_encode())
+        );
+        // v1.0.0 P1-5: seedAccountBalance MUST reject Address::ZERO
+        assert_eq!(
+            dispatch(seedAccountBalanceCall { trader: Address::ZERO, assetId: 2, balanceWad: iwad }.abi_encode()),
+            Err(InvalidAssetConfig {}.abi_encode())
+        );
     }
 }

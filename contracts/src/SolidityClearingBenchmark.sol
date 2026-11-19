@@ -173,11 +173,11 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         approvedSolvers[admin_] = true;
     }
 
-    function admin() public view override returns (address) {
+    function admin() public view override checkUnlocked returns (address) {
         return _admin;
     }
 
-    function pendingAdmin() external view override returns (address) {
+    function pendingAdmin() external view override checkUnlocked returns (address) {
         return _pendingAdmin;
     }
 
@@ -198,15 +198,15 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         emit AdminTransferred(prev, msg.sender);
     }
 
-    function assetCount() external view override returns (uint8) {
+    function assetCount() external view override checkUnlocked returns (uint8) {
         return _assetCount;
     }
 
-    function currentEpoch() external view override returns (uint64) {
+    function currentEpoch() external view override checkUnlocked returns (uint64) {
         return _currentEpoch;
     }
 
-    function domainSeparator() public view override returns (bytes32) {
+    function domainSeparator() public view override checkUnlocked returns (bytes32) {
         return keccak256(abi.encode(EIP712_DOMAIN_TYPEHASH, NAME_HASH, VERSION_HASH, block.chainid, address(this)));
     }
 
@@ -215,11 +215,11 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         return _balances[trader][assetId];
     }
 
-    function getConfirmedObligation(address debtor, address creditor, uint8 assetId) external view override returns (uint256) {
+    function getConfirmedObligation(address debtor, address creditor, uint8 assetId) external view override checkUnlocked returns (uint256) {
         return _confirmedObligations[debtor][creditor][assetId];
     }
 
-    function getFeeVault(uint8 assetId) external view override returns (uint256) {
+    function getFeeVault(uint8 assetId) external view override checkUnlocked returns (uint256) {
         return _feeVault[assetId];
     }
 
@@ -227,11 +227,11 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         return _vaultPhysicalRaw[assetId];
     }
 
-    function getNonceBitmap(address trader, uint256 wordPos) external view override returns (uint256) {
+    function getNonceBitmap(address trader, uint256 wordPos) external view override checkUnlocked returns (uint256) {
         return _nonceBitmaps[trader][wordPos];
     }
 
-    function getPartialFill(address trader, uint256 nonce) external view override returns (uint256) {
+    function getPartialFill(address trader, uint256 nonce) external view override checkUnlocked returns (uint256) {
         return _partialFills[trader][nonce];
     }
 
@@ -241,6 +241,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         external
         view
         override
+        checkUnlocked
         returns (
             address token,
             uint8 decimals,
@@ -262,6 +263,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         external
         view
         override
+        checkUnlocked
         returns (
             uint256 effectiveCollateralWad,
             uint256 totalLiabilityWad,
@@ -289,19 +291,25 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         return uint64(block.timestamp);
     }
 
+    function _queryTokenBalance(address token, bytes4 failSelector) internal view returns (uint256 bal) {
+        if (token == address(0) || token.code.length == 0) _rev(failSelector);
+        (bool ok, bytes memory ret) = token.staticcall(abi.encodeWithSelector(IERC20Minimal.balanceOf.selector, address(this)));
+        if (!ok || ret.length != 32) _rev(failSelector);
+        bal = uint256(bytes32(ret));
+    }
+
     function _callToken(address token, bytes memory payload) internal {
         if (token == address(0) || token.code.length == 0) _rev(InvalidAssetConfig.selector);
         (bool ok, bytes memory ret) = token.call(payload);
-        if (!ok || (ret.length != 0 && (ret.length != 32 || !abi.decode(ret, (bool))))) {
+        if (!ok || (ret.length != 0 && (ret.length != 32 || uint256(bytes32(ret)) != 1))) {
             _rev(InvalidAssetConfig.selector);
         }
     }
 
     function _safeTransferFromReceived(address token, address from, uint256 rawAmount) internal returns (uint256 received) {
-        if (token == address(0) || token.code.length == 0) _rev(InvalidAssetConfig.selector);
-        uint256 balBefore = IERC20Minimal(token).balanceOf(address(this));
+        uint256 balBefore = _queryTokenBalance(token, InvalidAssetConfig.selector);
         _callToken(token, abi.encodeWithSelector(IERC20Minimal.transferFrom.selector, from, address(this), rawAmount));
-        uint256 balAfter = IERC20Minimal(token).balanceOf(address(this));
+        uint256 balAfter = _queryTokenBalance(token, InvalidAssetConfig.selector);
         if (balAfter <= balBefore) _rev(InvalidAssetConfig.selector);
         unchecked { received = balAfter - balBefore; }
     }
@@ -327,12 +335,16 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         if (assetId > _assetCount || assetId >= 16) _rev(InvalidAssetConfig.selector);
         if (token != address(0) && token.code.length == 0) _rev(InvalidAssetConfig.selector);
 
+        uint64 ts = _requireValidTimestamp();
         AssetConfig storage existing = _assets[assetId];
         if (existing.initialized) {
             if (existing.token != token || existing.decimals != decimals) {
                 _rev(InvalidAssetConfig.selector);
             }
             uint256 prev = existing.markPriceWad;
+            if (ts <= existing.priceUpdatedAt && markPriceWad != prev) {
+                _rev(InvalidAssetConfig.selector);
+            }
             uint256 diff = markPriceWad >= prev ? (markPriceWad - prev) : (prev - markPriceWad);
             if (FullMath512.gtMul512(diff, BPS_DENOM, prev, MAX_MARK_STEP_BPS)) {
                 _rev(InvalidAssetConfig.selector);
@@ -342,8 +354,6 @@ contract SolidityClearingBenchmark is ISettlementEngine {
                 if (_assets[p].token == token) _rev(InvalidAssetConfig.selector);
             }
         }
-
-        uint64 ts = _requireValidTimestamp();
         _assets[assetId] = AssetConfig({
             token: token,
             decimals: decimals,
@@ -430,7 +440,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         int256 prev = _balances[msg.sender][assetId];
         if (prev < wadDelta) _rev(InsufficientWithdrawableBalance.selector);
         uint256 vRaw = _vaultPhysicalRaw[assetId];
-        if (vRaw < rawAmount || IERC20Minimal(cfg.token).balanceOf(address(this)) < rawAmount) {
+        if (vRaw < rawAmount || _queryTokenBalance(cfg.token, InsufficientWithdrawableBalance.selector) < rawAmount) {
             _rev(InsufficientWithdrawableBalance.selector);
         }
         newBalanceWad = FullMath512.checkedSubI256(prev, wadDelta);
@@ -530,7 +540,9 @@ contract SolidityClearingBenchmark is ISettlementEngine {
 
         uint256 factor = _unitScale(cfg.decimals);
         uint256 rawOut = feeWad / factor;
-        if (rawOut == 0 || _vaultPhysicalRaw[assetId] < rawOut) _rev(InsufficientWithdrawableBalance.selector);
+        if (rawOut == 0 || _vaultPhysicalRaw[assetId] < rawOut || _queryTokenBalance(cfg.token, InsufficientWithdrawableBalance.selector) < rawOut) {
+            _rev(InsufficientWithdrawableBalance.selector);
+        }
         sweptWad = rawOut * factor;
         _feeVault[assetId] = feeWad - sweptWad;
         _vaultPhysicalRaw[assetId] -= rawOut;
@@ -633,7 +645,8 @@ contract SolidityClearingBenchmark is ISettlementEngine {
             seizedCollateralWad = rawSeize;
             repaidDebtWad = cappedRepay;
         }
-        if (seizedCollateralWad == 0 || repaidDebtWad < MIN_INTENT_AMOUNT_WAD) _rev(InvalidIntent.selector);
+        bool fullDebtClearance = (repaidDebtWad == absDebt);
+        if (seizedCollateralWad == 0 || repaidDebtWad == 0 || (!fullDebtClearance && repaidDebtWad < MIN_INTENT_AMOUNT_WAD)) _rev(InvalidIntent.selector);
 
         int256 repayI = FullMath512.toInt256(repaidDebtWad);
         int256 seizeI = FullMath512.toInt256(seizedCollateralWad);
@@ -664,7 +677,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
 
     function seedAccountBalance(address trader, uint8 assetId, int256 balanceWad) external override checkUnlocked {
         if (_admin == address(0) || msg.sender != _admin || !benchmarkSeedingEnabled) _rev(UnauthorizedCaller.selector);
-        if (assetId >= _assetCount || _assets[assetId].token != address(0)) _rev(InvalidAssetConfig.selector);
+        if (trader == address(0) || assetId >= _assetCount || _assets[assetId].token != address(0)) _rev(InvalidAssetConfig.selector);
         _balances[trader][assetId] = balanceWad;
     }
 
