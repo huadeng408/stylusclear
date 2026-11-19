@@ -193,6 +193,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         address prev = _admin;
         _admin = msg.sender;
         _pendingAdmin = address(0);
+        approvedSolvers[prev] = false;
         approvedSolvers[msg.sender] = true;
         emit AdminTransferred(prev, msg.sender);
     }
@@ -319,7 +320,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         uint16 mmBps
     ) external override checkUnlocked {
         _onlyAdmin();
-        if (decimals > 18 || markPriceWad == 0 || mmBps == 0 || mmBps > imBps || imBps > BPS_DENOM) {
+        if (decimals > 18 || markPriceWad == 0 || mmBps < 2 || mmBps > imBps || imBps > BPS_DENOM) {
             _rev(InvalidAssetConfig.selector);
         }
         if (haircutBps >= BPS_DENOM) _rev(InvalidHaircut.selector);
@@ -361,13 +362,15 @@ contract SolidityClearingBenchmark is ISettlementEngine {
     function updateMarkPrice(uint8 assetId, uint256 markPriceWad) external override checkUnlocked {
         _onlyAdmin();
         if (assetId >= _assetCount || markPriceWad == 0) _rev(InvalidAssetConfig.selector);
+        uint64 ts = _requireValidTimestamp();
         uint256 prev = _assets[assetId].markPriceWad;
+        if (ts <= _assets[assetId].priceUpdatedAt && markPriceWad != prev) _rev(InvalidAssetConfig.selector);
         uint256 diff = markPriceWad >= prev ? (markPriceWad - prev) : (prev - markPriceWad);
         if (FullMath512.gtMul512(diff, BPS_DENOM, prev, MAX_MARK_STEP_BPS)) {
             _rev(InvalidAssetConfig.selector);
         }
         _assets[assetId].markPriceWad = markPriceWad;
-        _assets[assetId].priceUpdatedAt = _requireValidTimestamp();
+        _assets[assetId].priceUpdatedAt = ts;
     }
 
     function setRiskWindows(uint64 maxStaleness, uint16 maxDeviationBps, bool permissionless) external override checkUnlocked {

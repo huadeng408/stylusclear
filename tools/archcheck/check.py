@@ -83,7 +83,7 @@ def check_repo(root: Path, strict: bool = False) -> list[str]:
     if tickets_dir.exists():
         for tf in sorted(tickets_dir.glob("TKT-*.md")):
             ttxt = tf.read_text(encoding="utf-8")
-            if not (re.search(r"Blocked\s+by\b", ttxt, re.I) and re.search(r"Seam\b", ttxt, re.I)):
+            if not (re.search(r"Blocked\s+by\b", ttxt, re.IGNORECASE) and re.search(r"Seam\b", ttxt, re.IGNORECASE)):
                 errors.append(f"{tf.relative_to(root)}: missing 'Blocked by:' or 'Testing Seam:'")
 
     # 7) Dual-chain deployment schema parity
@@ -97,7 +97,8 @@ def check_repo(root: Path, strict: bool = False) -> list[str]:
     if strict:
         art = json.loads((root / "docs" / "benchmarks" / "measured-gas-artifacts.json").read_text(encoding="utf-8"))
         if art.get("calibration_status") not in (
-            "host_wasm_and_foundry_measured",
+            "host_replay_analytical_and_foundry_measured",
+        "host_wasm_and_foundry_measured",
             "arbitrum_sepolia_onchain_verified",
             "dual_chain_onchain_verified",
         ):

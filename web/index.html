@@ -299,7 +299,7 @@
       const dt = (performance.now() - t0).toFixed(2);
       document.getElementById("deskCountLabel").textContent = String(mesh.deskCount);
       document.getElementById("meshLatencyLabel").textContent = `${dt} ms`;
-      document.getElementById("meshSummaryBadge").textContent = sc && sc.expectedError ? `${count} Nodes · 0 Cycles Netted (Atomic Rollback)` : `${count} Nodes · ${count === (sc?.desks?.length || 0) ? sc.cyclesEliminated : sim.cyclesEliminated} Cycles Netted (${sim.compressionPct.toFixed(2)}%)`;
+      document.getElementById("meshSummaryBadge").textContent = scenario && scenario.expectedError ? `${mesh.deskCount} Nodes · 0 Cycles Netted (Atomic Rollback)` : `${mesh.deskCount} Nodes · ${mesh.deskCount === (scenario?.desks?.length || 0) ? scenario.cyclesEliminated : mesh.cyclesEliminated} Cycles Netted (${Number(mesh.compressionRatioPct).toFixed(2)}%)`;
 
       const svg = document.getElementById("meshSvg");
       const cx = 230, cy = 125, rx = 165, ry = 88;
@@ -412,13 +412,16 @@
           badge.textContent = "LOCAL PARITY VERIFIED · AWAITING LIVE DEPLOY";
           return;
         }
-        const payload = buildLiveScenarioPayloads(scenarioId, Number(netVal), cfg);
+        const payload = buildLiveScenarioPayloads(scenarioId, cfg);
         const target = cfg.stylusEngineAddress || cfg.solidityBenchmarkAddress;
         const { simulateSettleBatchKeyless } = await import("./dist/rpc-client.mjs");
-        const rpcRes = await simulateSettleBatchKeyless({ rpcUrl: cfg.rpcUrl, contractAddress: target, ...payload });
+        const rpcRes = await simulateSettleBatchKeyless({ rpcUrl: cfg.rpcUrl, engineAddress: target, ...payload });
         badge.textContent = rpcRes.ok ? "LIVE RPC PARITY · SETTLED" : `LIVE RPC REVERT · ${rpcRes.errorName || "GUARDED"}`;
-      } catch (_e) {
-        // Offline / file:// preview gracefully retains local deterministic parity state
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        badge.textContent = window.location.protocol === "file:"
+          ? "LOCAL PARITY VERIFIED · OFFLINE PREVIEW"
+          : `RPC ERROR · ${msg.slice(0, 48)}`;
       }
     }
     document.getElementById("runSimBtn").addEventListener("click", runLiveDualVmParity);

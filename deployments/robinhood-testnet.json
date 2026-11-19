@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "0.7.0",
+  "schemaVersion": "0.9.0",
   "network": "robinhood-chain-testnet",
   "chainId": 46630,
   "rpcUrl": "https://rpc.testnet.chain.robinhood.com",

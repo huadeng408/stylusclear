@@ -1,0 +1,63 @@
+{
+  "schema_version": "0.9.0",
+  "solver": "z3-solver 4.15.4",
+  "theorems_proved": 6,
+  "all_unsat": true,
+  "theorems": [
+    {
+      "theorem": "T1_U256_Adaptive_Bonus_Zero_Deadlock",
+      "description": "For any debt asset with mm_bps in [2, 10000] (enforced by configureAsset) and zero-haircut stablecoin collateral, bonus = min(mm_bps // 2, 250) never overflows U256 and strictly improves borrower health (mm_drop > seize_val).",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 127.25
+    },
+    {
+      "theorem": "T2_Floor_Proportional_Cap_Bound",
+      "description": "When raw_seize > avail_coll, two-step floor back-calculation guarantees back_repay * p_d * (10000 + bonus) <= avail_coll * p_c * 10000 AND strictly bounds borrower rounding loss to < 2 rounding quanta.",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 30.52
+    },
+    {
+      "theorem": "T3_UCPBA_Lot_SubAdditivity_And_Bounded_Dust",
+      "description": "Inductive Euclidean proof over arbitrary N >= 1 UCPBA lots: buyer ceil-notional is sub-additive, seller floor-notional is super-additive, and per-pair rounding dust is strictly in {0, 1} wei.",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 13.48
+    },
+    {
+      "theorem": "T4_U512_FullMath_NoOverflow_And_Sandwich",
+      "description": "Over exact 512-bit intermediate arithmetic (FullMath512.sol & clearing-core/math.rs), mul_div_floor and mul_div_ceil for all a,b,d <= 10^36 never overflow U512/U256, satisfy q_floor*d <= a*b <= q_ceil*d, and differ by at most 1 wei.",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 5.71
+    },
+    {
+      "theorem": "T5_U256_MultiDecimal_Vault_Exactness",
+      "description": "For 6/8/18-decimal ERC-20 tokens up to 10^24 raw units, WAD scaling never overflows U256 and exact raw<->WAD withdrawal subtraction preserves exact quantum alignment with zero dust leakage.",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 7.52
+    },
+    {
+      "theorem": "T6_BitVec64_SubQuantum_Debt_Exit_Guarantee",
+      "description": "Over 64-bit unsigned bitvectors for 6/8-decimal assets, repaySubQuantumDebt with transfer_from_checked(received_raw >= 1) strictly clears any sub-quantum negative balance to > 0 (and < 1 quantum for standard 1-unit transfers) without wraparound.",
+      "status": "PROVED_UNSAT",
+      "solver": "z3-solver 4.15.4",
+      "elapsed_ms": 108.71
+    }
+  ],
+  "hypothesis_differential": {
+    "examples_checked": 50,
+    "cli_binary_differential_examples": 0,
+    "cli_replay_cross_checked": false,
+    "fields_cross_checked": [
+      "cycles_eliminated",
+      "clearing_price_wad",
+      "matched_volume_wad",
+      "dust_wad",
+      "post_accounts",
+      "fee_vault_deltas"
+    ]
+  }
+}

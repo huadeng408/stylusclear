@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# StylusClear v0.7.0 Full 7-Gate Strict Verification Suite
+# StylusClear v0.9.0 Full 7-Gate Strict Verification Suite
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
@@ -23,6 +23,8 @@ if [[ -f "$CACHE_DIR/activate_env.sh" ]]; then
   # shellcheck disable=SC1091
   source "$CACHE_DIR/activate_env.sh"
 fi
+NODE_PATH="${NODE_PATH:-}"
+if [[ -d "$ROOT_DIR/web/node_modules" ]]; then NODE_PATH="$ROOT_DIR/web/node_modules${NODE_PATH:+:$NODE_PATH}"; fi
 export NODE_PATH="${NODE_PATH%:}"
 CARGO_VENDOR_OPTS=()
 if [[ -n "${OFFLINE_CRATES_VENDOR:-}" && -d "${OFFLINE_CRATES_VENDOR}" ]]; then
@@ -84,4 +86,4 @@ node tests/test_seam_s3_workbench.mjs
 echo "[check 7/7] Calibrated Benchmark Artifact Integrity..."
 python3 scripts/generate-benchmarks.py --verify-only
 
-echo "[check] ALL 7 GATES PASSED (StylusClear v0.7.0)."
+echo "[check] ALL 7 GATES PASSED (StylusClear v0.9.0)."

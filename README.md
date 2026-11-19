@@ -1,8 +1,8 @@
-# StylusClear (`v0.8.0`)
+# StylusClear (`v0.9.0`)
 
 **Solverless Multilateral Obligation Cycle Compression, 512-Bit Uniform Clearing Price Batch Auction (UCPBA) & Cross-Margin Risk Engine in Arbitrum Stylus (Rust WASM 1.0 MVP)**
 
-[![WASM Brotli-q11](https://img.shields.io/badge/Stylus_WASM_Brotli--q11-24411_B_%28%3C24KB%29-00d4ff)](#empirical-benchmarks-cold-evm-vs-stylus-wasm)
+[![WASM Brotli-q11](https://img.shields.io/badge/Stylus_WASM_Brotli--q11-24527_B_%28%3C24KB%29-00d4ff)](#empirical-benchmarks-cold-evm-vs-stylus-wasm)
 [![Z3 Formal Proofs](https://img.shields.io/badge/Z3_SMT_Theorems-6%2F6_PROVED_UNSAT-18e299)](#formal-verification--differential-testing)
 [![Chains](https://img.shields.io/badge/Chains-Arbitrum_Sepolia_421614_%7C_Robinhood_Testnet_46630-9d7bff)](#dual-chain-deployment-arbitrum-sepolia--robinhood-chain-testnet)
 
@@ -11,7 +11,7 @@
 ## Why StylusClear?
 Institutional trading desks settling `USDC`, `USDG`, `WETH`, `ARB`, and tokenized equities (`NVDAx`) on [Arbitrum](https://docs.arbitrum.io/stylus/gentle-introduction) and [Robinhood Chain Testnet (`46630`)](https://docs.robinhood.com/chain/connecting/) face severe capital lockups when bilateral payables settle sequentially, and catastrophic margin-rounding risks (exemplified by recent DeFi margin exploits covered on [CryptoTicker](https://cryptoticker.io/en/crypto-hack-news/)).
 
-**StylusClear `v0.8.0`** executes two compute-intensive institutional primitives atomically inside a **`24,527`-byte** Brotli-compressed Rust WASM contract—with **zero external solver trust** and **100% bit-exact parity** against a Solidity `via_ir` reference twin:
+**StylusClear `v0.9.0`** executes two compute-intensive institutional primitives atomically inside a **`24,527`-byte** Brotli-compressed Rust WASM contract—with **zero external solver trust** and **100% bit-exact parity** against a Solidity `via_ir` reference twin:
 1. **Canonical `O(V²)` 2-Origin BFS Multilateral Cycle Compression**: Ranks participants deterministically by address, prioritizes multilateral (`>=3`-hop) payable cycles over greedy 2-cycles in strict polynomial time, and cancels circular debt without touching collateral (`92.05%` liquidity savings on the standard 4-desk ring).
 2. **512-Bit Uniform Clearing Price Batch Auction (UCPBA)**: Clears multi-party `Buy`/`Sell` intents at a single equilibrium price within a `±20%` reference oracle band, guaranteeing exact 512-bit per-lot Individual Rationality (`ceil` buyer debit, `floor` seller credit, non-negative rounding dust swept to `feeVault`).
 3. **Adaptive Floor-Capped Portfolio Margin & Liquidation**: Enforces cross-asset haircutted collateral (`USDC/USDG`, `WETH`, `ARB`, `NVDAx`), post-batch Initial Margin / Health Monotonicity guards, physical ERC-20 vault solvency on spot withdrawals, sub-quantum dust/debt closure (`repaySubQuantumDebt`), and deadlock-free underwater liquidation (`bonus = min(mm_bps / 2, 250)`).
@@ -19,16 +19,16 @@ Institutional trading desks settling `USDC`, `USDG`, `WETH`, `ARB`, and tokenize
 ![StylusClear Fail-Closed Guard](docs/assets/workbench-fail-closed-guard.png)
 
 ## Empirical Benchmarks (Cold EVM `vm.cool()` vs Stylus WASM)
-Measured with Foundry (`solc 0.8.38`, `via_ir = true`, EIP-2929 cold storage via `vm.cool()`) and empirical `wasmi` instruction fuel execution on `artifacts/clearing_stylus.wasm` per [Arbitrum Stylus Gas & Ink Metering](https://docs.arbitrum.io/stylus/concepts/gas-metering), [HostIO Pricing](https://docs.arbitrum.io/stylus/reference/opcode-hostio-pricing), and the `32,000,000` single-block gas cap in [Arbitrum Chain Params](https://docs.arbitrum.io/arbitrum-essentials/reference/chain-params):
+Measured with Foundry (`solc 0.8.38`, `via_ir = true`, `optimizer_runs = 200`, EIP-2929 cold storage via `vm.cool()`) vs. our offline analytical ArbOS Stylus cost model anchored to host-verified Rust `clearing-cli` replay (`scripts/measure-wasm-benchmarks.py`, including all 8 config cold SLOADs, all `get_partial_fill` cold SLOADs, conservative 5,000-gas SSTOREs, `ecrecover`, `native_keccak256`, and `memory_grow`; shared L2 calldata gas excluded identically from both sides' execution frames and disclosed in JSON) per [Arbitrum Stylus Gas & Ink Metering](https://docs.arbitrum.io/stylus/concepts/gas-metering), [HostIO Pricing](https://docs.arbitrum.io/stylus/reference/opcode-hostio-pricing), and the `32,000,000` single-block gas cap in [Arbitrum Chain Params](https://docs.arbitrum.io/arbitrum-essentials/reference/chain-params):
 
-| Tier | Desks / Obs / Intents | Cycles Netted | Solidity Cold EVM Gas (`vm.cool()`) | Measured WASM Fuel (`wasmi`) | Stylus Total Gas Est. | Gas Saved (`EVM / Stylus`) |
+| Tier | Desks / Obs / Intents | Cycles Netted | Solidity Cold EVM Gas (`vm.cool()`, runs=200) | Analytical WASM Ops (Host Replay) | Stylus Total Gas Est. (Complete HostIO) | Gas Saved (`EVM / Stylus`) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| `Small` | 4 / 5 / 4 | 2 | `459,676` | `7,671,048` | `172,716` | **-72.4% (`2.66x`)** |
-| `Medium` | 12 / 20 / 24 | 3 | `2,417,984` | `25,018,897` | `525,654` | **-82.5% (`4.60x`)** |
-| `Large` | 32 / 64 / 64 | 7 | `10,578,829` | `73,788,624` | `1,437,332` | **-89.4% (`7.36x`)** |
-| `Stress` | 44 / 88 / 88 | 7 | `18,289,638` | `107,687,616` | `1,974,973` | **-89.2% (`9.26x`)** |
+| `Small` | 4 / 5 / 4 | 2 | `459,169` | `5,406,000` | `215,873` | **-53.0% (`2.13x`)** |
+| `Medium` | 12 / 20 / 24 | 9 | `2,416,348` | `23,486,000` | `711,591` | **-70.6% (`3.40x`)** |
+| `Large` | 32 / 64 / 64 | 33 | `10,574,713` | `87,682,000` | `1,908,829` | **-81.9% (`5.54x`)** |
+| `Stress` | 44 / 88 / 88 | 45 | `18,284,070` | `136,990,000` | `2,617,806` | **-85.7% (`6.98x`)** |
 
-* **Zero-Patch Reproducible WASM 1.0 MVP**: `65,341 B` raw / **`24,527 B` Brotli-q11** (`165 B` below the `24,576 B` [Stylus VM limit](https://docs.arbitrum.io/stylus/concepts/vm-differences) and `73,893 B` below [`ArbOS 61 ("Elara")`](https://docs.arbitrum.io/run-a-node/arbos-releases/arbos61)'s `96 KB` limit), compiled using official Binaryen `wasm-opt` passes with **zero custom binary section mutation** (`AIP-31605` compliant per [[Constitutional] AIP: Stylus Activation Contract](https://forum.arbitrum.foundation/t/constitutional-aip-stylus-activation-contract/31605)).
+* **Zero-Patch Reproducible WASM 1.0 MVP**: `65,341 B` raw / **`24,527 B` Brotli-q11** (`24,531 B` incl. 4 B Stylus prefix — `45 B` below the `24,576 B` [Stylus VM limit](https://docs.arbitrum.io/stylus/concepts/vm-differences) and `73,773 B` below [`ArbOS 61 ("Elara")`](https://docs.arbitrum.io/run-a-node/arbos-releases/arbos61)'s `96 KB` limit; local `v0.9.0` rebuild via `scripts/check.sh` yields `65,402 B` raw / `24,454 B` Brotli-q11, `118 B` below the 24 KiB cap), compiled using official Binaryen `wasm-opt` passes with **zero custom binary section mutation** (`AIP-31605` compliant per [[Constitutional] AIP: Stylus Activation Contract](https://forum.arbitrum.foundation/t/constitutional-aip-stylus-activation-contract/31605)).
 
 ## Formal Verification & Differential Testing
 * **6 Z3 SMT Theorems (`tools/formal/prove_invariants_z3.py`)**: Machine-checked `PROVED_UNSAT` proofs for (T1) Zero-Deadlock `USDC/USDG` Adaptive Bonus Liquidation, (T2) Floor Proportional Cap No-Overcharge, (T3) 512-Bit UCPBA Per-Lot Individual Rationality, (T4) Double-Entry Conservation with Dust, (T5) Physical Vault Solvency, and (T6) Sub-Quantum Debt Single-Unit Closure.
@@ -52,8 +52,8 @@ bash scripts/deploy-sepolia.sh && bash scripts/demo-sepolia-live.sh sepolia
 # 2. Robinhood Chain Testnet (Chain ID 46630 — USDG + NVDAx RWA slot)
 bash scripts/deploy-robinhood-testnet.sh && bash scripts/demo-sepolia-live.sh robinhood
 
-# 3. Mux pre-rendered 1080p60 video segments + -14 LUFS narration (+ optional 35s live explorer clip)
-bash scripts/build-final-video.sh [optional_live_35s.mp4] docs/assets/demo-final.mp4
+# 3. Mux pre-rendered 1080p60 video segments + -14 LUFS narration (+ optional 32s live explorer clip)
+bash scripts/build-final-video.sh [optional_live_32s.mp4] docs/assets/demo-final.mp4
 ```
 
 ## Repository Structure

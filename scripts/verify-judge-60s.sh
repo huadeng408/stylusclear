@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# StylusClear v0.7.0 Fast Judge Verification (< 20 seconds)
+# StylusClear v0.9.0 Fast Judge Verification (< 20 seconds)
 START_TS="$(date +%s)"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -10,6 +10,8 @@ if [[ -f "$HOME/.cache/stylusclear_entity_sandbox/activate_env.sh" ]]; then
   # shellcheck disable=SC1091
   source "$HOME/.cache/stylusclear_entity_sandbox/activate_env.sh"
 fi
+NODE_PATH="${NODE_PATH:-}"
+if [[ -d "$ROOT_DIR/web/node_modules" ]]; then NODE_PATH="$ROOT_DIR/web/node_modules${NODE_PATH:+:$NODE_PATH}"; fi
 export NODE_PATH="${NODE_PATH%:}"
 CARGO_VENDOR_OPTS=()
 if [[ -n "${OFFLINE_CRATES_VENDOR:-}" && -d "${OFFLINE_CRATES_VENDOR}" ]]; then
@@ -22,11 +24,13 @@ wasm-opt --mvp-features -O0 artifacts/clearing_stylus.wasm -o /dev/null
 python3 scripts/generate-benchmarks.py --verify-only
 
 echo "=== [2/5] Rust Core & Stylus Unit Tests ==="
-cargo test "${CARGO_VENDOR_OPTS[@]}" --locked --offline --workspace --quiet
+OFFLINE_ARG=()
+if [[ -n "${OFFLINE_CRATES_VENDOR:-}" || -f "$ROOT_DIR/.cargo/config.toml" ]]; then OFFLINE_ARG=(--offline); fi
+cargo test "${CARGO_VENDOR_OPTS[@]}" --locked "${OFFLINE_ARG[@]}" --workspace --quiet
 
 echo "=== [3/5] Foundry Differential & Cold-Storage Gas Suite ==="
 SOLC_OPT=(); if command -v solc >/dev/null 2>&1; then SOLC_OPT=(--use "$(command -v solc)"); fi
-forge test "${SOLC_OPT[@]}" --offline
+forge test "${SOLC_OPT[@]}" "${OFFLINE_ARG[@]}"
 
 echo "=== [4/5] Z3 Formal SMT Proofs (6 Theorems) & Seam S1/S2/S4 ==="
 python3 tools/formal/prove_invariants_z3.py

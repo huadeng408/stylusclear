@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-from typing import Dict, Tuple
 
 _RC = [
     0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
@@ -75,7 +74,7 @@ SECP_GY = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
 G_POINT = (SECP_GX, SECP_GY)
 
 
-def _point_add(p1: Tuple[int, int] | None, p2: Tuple[int, int] | None) -> Tuple[int, int] | None:
+def _point_add(p1: tuple[int, int] | None, p2: tuple[int, int] | None) -> tuple[int, int] | None:
     if p1 is None:
         return p2
     if p2 is None:
@@ -95,7 +94,7 @@ def _point_add(p1: Tuple[int, int] | None, p2: Tuple[int, int] | None) -> Tuple[
     return (x3, y3)
 
 
-def _scalar_mul(k: int, pt: Tuple[int, int] | None) -> Tuple[int, int] | None:
+def _scalar_mul(k: int, pt: tuple[int, int] | None) -> tuple[int, int] | None:
     k = k % SECP_N
     if k == 0 or pt is None:
         return None
@@ -104,7 +103,10 @@ def _scalar_mul(k: int, pt: Tuple[int, int] | None) -> Tuple[int, int] | None:
     while k > 0:
         if k & 1:
             res = _point_add(res, addend)
-        addend = _point_add(addend, addend)
+        nxt = _point_add(addend, addend)
+        if nxt is None:
+            break
+        addend = nxt
         k >>= 1
     return res
 
@@ -136,7 +138,7 @@ def _rfc6979_k(privkey_int: int, digest: bytes) -> int:
         v = hmac.new(k, v, hashlib.sha256).digest()
 
 
-def sign_digest(privkey_int: int, digest: bytes) -> Tuple[int, bytes, bytes]:
+def sign_digest(privkey_int: int, digest: bytes) -> tuple[int, bytes, bytes]:
     if len(digest) != 32:
         raise ValueError("Digest must be 32 bytes")
     z = int.from_bytes(digest, "big")
@@ -289,7 +291,7 @@ def sign_trade_intent(
     limit_price_wad: int,
     max_epoch: int,
     nonce: int,
-) -> Dict[str, str | int]:
+) -> dict[str, str | int]:
     trader_addr = privkey_to_address(privkey_int)
     digest = compute_intent_digest(
         chain_id,
@@ -321,7 +323,7 @@ def sign_obligation_attestation(
     amount_wad: int,
     max_epoch: int,
     nonce: int,
-) -> Dict[str, str | int]:
+) -> dict[str, str | int]:
     debtor_addr = privkey_to_address(debtor_privkey_int)
     digest = compute_obligation_digest(
         chain_id,

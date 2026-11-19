@@ -112,7 +112,7 @@ pub fn compress_obligation_cycles(
     obligations: &[ObligationEdge],
 ) -> Result<CycleCompressionOutcome, ClearingError> {
     let num_accounts = account_addresses.len();
-    if obligations.len() > MAX_OBLIGATIONS || num_accounts > MAX_NETTING_ACCOUNTS {
+    if obligations.len() > MAX_OBLIGATIONS || num_accounts > MAX_NETTING_ACCOUNTS || num_assets > 16 {
         return Err(ClearingError::BatchCapacityExceeded);
     }
 

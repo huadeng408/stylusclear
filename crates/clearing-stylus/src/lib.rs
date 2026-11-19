@@ -670,6 +670,7 @@ impl StylusClearingEngine {
         let (old_admin, seeding, permissionless, cur_count, epoch) = self.read_header();
         self.write_header(sender, seeding, permissionless, cur_count, epoch);
         self.sstore(&word_u8(SLOT_PENDING_ADMIN), &[0u8; 32]);
+        self.set_solver(old_admin, false);
         self.set_solver(sender, true);
         self.emit_words(
             b"AdminTransferred(address,address)" as &[u8],
@@ -702,7 +703,7 @@ impl StylusClearingEngine {
         if u64::from(haircut_bps) >= BPS_DENOM_U64 {
             return Err(ClearingError::InvalidHaircut);
         }
-        if mm_bps == 0 || mm_bps > im_bps || u64::from(im_bps) > BPS_DENOM_U64 {
+        if mm_bps < 2 || mm_bps > im_bps || u64::from(im_bps) > BPS_DENOM_U64 {
             return Err(ClearingError::InvalidAssetConfig);
         }
         if !token.is_zero() && self.vm().account_code_size(token) == 0 {
@@ -763,9 +764,13 @@ impl StylusClearingEngine {
             return Err(ClearingError::InvalidAssetConfig);
         }
         let mut rec = self.read_asset(asset_id);
+        let now = self.vm().block_timestamp();
+        if now <= rec.cfg.price_updated_at && *mark_price_wad != rec.cfg.mark_price_wad {
+            return Err(ClearingError::InvalidAssetConfig);
+        }
         Self::check_mark_step(&rec.cfg.mark_price_wad, mark_price_wad)?;
         rec.cfg.mark_price_wad = *mark_price_wad;
-        rec.cfg.price_updated_at = self.vm().block_timestamp();
+        rec.cfg.price_updated_at = now;
         self.write_asset(&rec);
         Ok(())
     }
@@ -854,6 +859,9 @@ impl StylusClearingEngine {
             return Err(ClearingError::InvalidAssetConfig);
         }
         let rec = self.read_asset(asset_id);
+        if rec.token.is_zero() {
+            return Err(ClearingError::InvalidAssetConfig);
+        }
         let mut wad_u = U256::ZERO;
         scale_raw_to_wad_ref(raw_amount, rec.cfg.decimals, &mut wad_u)?;
         let mut wad_delta = I256::ZERO;
@@ -928,7 +936,7 @@ impl StylusClearingEngine {
         self.set_vault_raw(asset_id, &v_raw);
         self.emit_words(
             b"SubQuantumDebtRepaid(address,uint8,uint256,int256)" as &[u8],
-            &[word_addr(sender), word_u8(asset_id), u256_be(&one_raw), i256_be(&next)],
+            &[word_addr(sender), word_u8(asset_id), u256_be(&received_raw), i256_be(&next)],
             3,
         );
         *out = next;

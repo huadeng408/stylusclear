@@ -8,15 +8,15 @@ and floor-capped underwater liquidation parity with:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 from tools.ref_sim.crypto_eip712 import (
-    compute_domain_separator,
     compute_intent_digest,
     compute_obligation_digest,
     ecrecover,
 )
+
 
 def recover_eip712_signer(digest: bytes, v: int, r_hex: str | int, s_hex: str | int) -> str | None:
     if isinstance(r_hex, int):
@@ -148,8 +148,8 @@ class ObligationEdge:
 @dataclass(frozen=True)
 class CycleCompressionOutcome:
     cycles_eliminated: int
-    compressed_volume_by_asset: List[int]
-    residual_obligations: List[ObligationEdge]
+    compressed_volume_by_asset: list[int]
+    residual_obligations: list[ObligationEdge]
 
 
 @dataclass(frozen=True)
@@ -172,14 +172,13 @@ class IntentFill:
 class LiquidationOutcome:
     repaid_debt_wad: int
     seized_collateral_wad: int
-    post_underwater_balances: List[int]
-    post_liquidator_balances: List[int]
+    post_underwater_balances: list[int]
+    post_liquidator_balances: list[int]
 
 
 def _norm_addr(addr: str) -> str:
     s = addr.strip().lower()
-    if s.startswith("0x"):
-        s = s[2:]
+    s = s.removeprefix("0x")
     if len(s) != 40:
         raise ClearingEngineError("InvalidAssetConfig", f"bad address {addr}")
     int(s, 16)
@@ -213,9 +212,10 @@ def validate_asset_configs_selective(
             raise ClearingEngineError("InvalidHaircut")
         if cfg.mm_bps <= 0 or cfg.mm_bps > cfg.im_bps or cfg.im_bps > BPS_DENOM:
             raise ClearingEngineError("InvalidAssetConfig")
-        if (active_mask & (1 << idx)) != 0:
-            if block_timestamp < cfg.price_updated_at or (block_timestamp - cfg.price_updated_at) > max_price_staleness:
-                raise ClearingEngineError("StaleMarkPrice")
+        if (active_mask & (1 << idx)) != 0 and (
+            block_timestamp < cfg.price_updated_at or (block_timestamp - cfg.price_updated_at) > max_price_staleness
+        ):
+            raise ClearingEngineError("StaleMarkPrice")
 
 
 def validate_asset_configs(
@@ -264,13 +264,13 @@ def evaluate_account_risk(
     )
 
 
-def _find_canonical_cycle_bfs(start: int, num_accounts: int, mat: List[int]) -> List[int]:
+def _find_canonical_cycle_bfs(start: int, num_accounts: int, mat: list[int]) -> list[int]:
     """Exact O(V^2) 2-Origin BFS cycle finder matching crates/clearing-core/src/netting.rs (D-31)."""
     r1 = [-1] * num_accounts
     r2 = [-1] * num_accounts
-    q_node: List[int] = []
-    q_orig: List[int] = []
-    q_par: List[int] = []
+    q_node: list[int] = []
+    q_orig: list[int] = []
+    q_par: list[int] = []
 
     for f in range(start + 1, num_accounts):
         if mat[start * num_accounts + f] > 0:
@@ -287,7 +287,7 @@ def _find_canonical_cycle_bfs(start: int, num_accounts: int, mat: List[int]) -> 
         q_head += 1
 
         if orig != u and mat[u * num_accounts + start] > 0:
-            rev: List[int] = []
+            rev: list[int] = []
             qi = cur_qi
             while qi != -1:
                 rev.append(q_node[qi])
@@ -349,7 +349,7 @@ def compress_obligation_cycles(
 
     compressed_by_asset = [0] * num_assets
     cycles_eliminated = 0
-    residual: List[ObligationEdge] = []
+    residual: list[ObligationEdge] = []
 
     for a in range(num_assets):
         if (asset_mask & (1 << a)) == 0:
@@ -404,7 +404,7 @@ def _allocate_side_fills(
     target_volume: int,
     step: int,
     is_buy: bool,
-) -> List[Tuple[int, int]]:
+) -> list[tuple[int, int]]:
     if target_volume == 0 or not eligible_pos:
         return [(idx, 0) for idx in eligible_pos]
     caps = [quantize_down(intents[idx]["amount_wad"], step) for idx in eligible_pos]
@@ -413,7 +413,7 @@ def _allocate_side_fills(
         return list(zip(eligible_pos, caps))
 
     target_units = target_volume // step
-    fills: List[int] = []
+    fills: list[int] = []
     allocated_units = 0
     for cap in caps:
         part_units = (cap * target_units) // total_offered
@@ -422,7 +422,7 @@ def _allocate_side_fills(
 
     rem_units = target_units - allocated_units
     if rem_units > 0:
-        def sort_key(slot: int) -> Tuple[int, bytes, int]:
+        def sort_key(slot: int) -> tuple[int, bytes, int]:
             it = intents[eligible_pos[slot]]
             p_key = -it["limit_price_wad"] if is_buy else it["limit_price_wad"]
             return (p_key, _addr_bytes(it["trader_address"]), it["nonce"])
@@ -446,7 +446,7 @@ def clear_single_market_auction(
     max_price_deviation_bps: int,
     market_indices: Sequence[int],
     all_intents: Sequence[dict],
-) -> Tuple[MarketAuctionReport, List[Tuple[int, int, int, int]]]:
+) -> tuple[MarketAuctionReport, list[tuple[int, int, int, int]]]:
     ref_price = mul_div_floor(base_mark_wad, WAD, quote_mark_wad)
     if ref_price == 0:
         raise ClearingEngineError("InvalidAssetConfig")
@@ -536,7 +536,7 @@ def clear_single_market_auction(
 
     total_paid = 0
     total_recv = 0
-    executions: List[Tuple[int, int, int, int]] = []
+    executions: list[tuple[int, int, int, int]] = []
     for idx, fill_base in buy_fills:
         if fill_base == 0:
             continue
@@ -572,12 +572,15 @@ def execute_underwater_liquidation(
     debt_asset: int,
     collateral_asset: int,
     repay_amount_wad: int,
-    underwater_address: Optional[str] = None,
-    liquidator_address: Optional[str] = None,
+    underwater_address: str | None = None,
+    liquidator_address: str | None = None,
 ) -> LiquidationOutcome:
-    if underwater_address is not None and liquidator_address is not None:
-        if _norm_addr(underwater_address) == _norm_addr(liquidator_address):
-            raise ClearingEngineError("InvalidIntent", "self-liquidation forbidden")
+    if (
+        underwater_address is not None
+        and liquidator_address is not None
+        and _norm_addr(underwater_address) == _norm_addr(liquidator_address)
+    ):
+        raise ClearingEngineError("InvalidIntent", "self-liquidation forbidden")
     n_assets = len(assets)
     if (
         n_assets == 0
@@ -661,7 +664,7 @@ def execute_underwater_liquidation(
     )
 
 
-def _consume_nonce(bitmaps: Dict[Tuple[int, int], int], account_idx: int, nonce: int) -> None:
+def _consume_nonce(bitmaps: dict[tuple[int, int], int], account_idx: int, nonce: int) -> None:
     _check_u256(nonce)
     word_pos = nonce >> 8
     bit_pos = nonce & 0xFF
@@ -718,8 +721,8 @@ def execute_batch_payload(payload: dict) -> dict:
 
     validate_asset_configs_selective(assets, 0, block_timestamp, max_price_staleness)
 
-    addrs: List[str] = []
-    bals: List[List[int]] = []
+    addrs: list[str] = []
+    bals: list[list[int]] = []
     active_mask = 0
     for i, acc in enumerate(raw_accounts):
         addr = _norm_addr(acc["address"])
@@ -752,7 +755,7 @@ def execute_batch_payload(payload: dict) -> dict:
         active_mask = 1
     validate_asset_configs_selective(assets, active_mask, block_timestamp, max_price_staleness)
 
-    work_bitmaps: Dict[Tuple[int, int], int] = {}
+    work_bitmaps: dict[tuple[int, int], int] = {}
     nb_raw = payload.get("nonce_bitmaps", {})
     if isinstance(nb_raw, dict):
         for k, v_word in nb_raw.items():
@@ -763,7 +766,7 @@ def execute_batch_payload(payload: dict) -> dict:
         for entry in nb_raw:
             work_bitmaps[(int(entry["account"]), int(entry["word_pos"]))] = int(entry["word"])
 
-    work_confirmed: Dict[Tuple[int, int, int], int] = {}
+    work_confirmed: dict[tuple[int, int, int], int] = {}
     co_raw = payload.get("confirmed_obligations", {})
     if isinstance(co_raw, dict):
         for k, v_amt in co_raw.items():
@@ -773,8 +776,7 @@ def execute_batch_payload(payload: dict) -> dict:
         for entry in co_raw:
             work_confirmed[(int(entry["debtor"]), int(entry["creditor"]), int(entry["asset_id"]))] = int(entry["amount_wad"])
 
-    domain_sep = compute_domain_separator(chain_id, verifying_contract)
-    verified_edges: List[ObligationEdge] = []
+    verified_edges: list[ObligationEdge] = []
     touched_mask = 0
     risk_mask = 0
 
@@ -820,7 +822,7 @@ def execute_batch_payload(payload: dict) -> dict:
         verified_edges.append(ObligationEdge(u, v, a, amt))
         touched_mask |= (1 << u) | (1 << v)
 
-    normalized_intents: List[dict] = []
+    normalized_intents: list[dict] = []
     staged_bitmaps = dict(work_bitmaps)
 
     for idx, raw in enumerate(raw_intents):
@@ -891,7 +893,7 @@ def execute_batch_payload(payload: dict) -> dict:
         )
 
     pre_sums = [0] * num_assets
-    pre_risks: List[AccountRiskMetrics] = []
+    pre_risks: list[AccountRiskMetrics] = []
     for u in range(num_accounts):
         for a in range(num_assets):
             pre_sums[a] = _check_i256(pre_sums[a] + bals[u][a])
@@ -904,12 +906,12 @@ def execute_batch_payload(payload: dict) -> dict:
         risk_mask |= 1 << res_ob.debtor
 
     fee_deltas = [0] * num_assets
-    auctions: List[MarketAuctionReport] = []
+    auctions: list[MarketAuctionReport] = []
     total_matched = 0
     intent_fills = [IntentFill(i, 0, 0) for i in range(len(normalized_intents))]
 
     for b_idx in range(1, num_assets):
-        for q_idx in range(0, b_idx):
+        for q_idx in range(b_idx):
             indices = [i for i, it in enumerate(normalized_intents) if it["base_asset"] == b_idx and it["quote_asset"] == q_idx]
             if not indices:
                 continue

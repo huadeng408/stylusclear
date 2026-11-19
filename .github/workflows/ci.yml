@@ -26,4 +26,6 @@ jobs:
         working-directory: web
         run: npm install --no-audit --no-fund
       - name: Run Full 7-Gate Strict Check
+        env:
+          NODE_PATH: ${{ github.workspace }}/web/node_modules
         run: bash scripts/check.sh --strict

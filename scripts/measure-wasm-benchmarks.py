@@ -156,16 +156,20 @@ def build_isomorphic_payload(n_acc: int, n_obs: int, n_int: int) -> dict:
 
 
 def estimate_stylus_metrics(n_acc: int, n_obs: int, cycles: int, n_int: int) -> dict:
-    """Transparent ArbOS Stylus ink + cold-storage HostIO cost model (10,000 ink = 1 EVM gas).
+    """Transparent ArbOS Stylus analytical ink + complete EIP-2929 HostIO cost model (10,000 ink = 1 EVM gas).
 
-    - Compute ink: O(V^2 * cycles) BFS netting + O(I log I) UCPBA + 512-bit margin check
-      calibrated against native Rust WASM instruction counts (~72 ink/op average under ArbOS AOT).
-    - HostIO cold-storage & precompile gas (identical EIP-2929 + ecrecover rules as EVM):
-      * Base tx + Stylus cached init: 21,000 + 352 gas
-      * Cold SLOAD (2,100 gas): header + 2 assets + 2*n_acc balances + n_obs obligations + n_acc nonce words
-      * Warm/Cold SSTORE update (5,000 gas): 2*n_acc balances + n_obs obligations + n_acc nonces + header
-      * ecrecover precompile (3,000 gas * n_int) + native_keccak256 (~36 gas * (3*n_acc + n_obs + 2*n_int))
-      * Event logs + HostIO context switch overhead (0.84 gas/call)
+    Offline pre-deployment proxy (replaced by live `eth_estimateGas` / `evm_ink_left()` on testnet):
+    - Compute ops: analytical O(V^2 * cycles) BFS netting + O(I log I) UCPBA + 512-bit margin check
+      anchored to verified Rust `clearing-cli` replay with identical cycle topology and matched volume.
+    - Complete HostIO cold-storage & precompile gas (parity with Solidity `vm.cool()` cold execution):
+      * Base tx + Stylus cached init + WASM memory_grow: 21,000 + 352 + 4,096 gas
+      * Cold SLOAD (2,100 gas): 8 config slots (header + risk + 2x3 assets) + 2*n_acc balances
+        + n_obs obligations + n_acc nonce words + n_int `get_partial_fill` slots
+      * SSTORE state writes (5,000 gas conservative avg): 1 header + 2*n_acc balances
+        + n_obs obligations + n_acc nonce words + n_int partial-fill slots
+      * ecrecover precompile (3,000 gas * n_int) + native_keccak256 (36 gas * keccak_calls)
+      * Event logs (2,500 gas) + HostIO boundary overhead (1 gas/call)
+      * Shared L2 calldata bytes/gas disclosed separately (excluded identically from `forge test` frame gas)
     """
     wasm_instructions = (
         1_250_000
@@ -174,18 +178,21 @@ def estimate_stylus_metrics(n_acc: int, n_obs: int, cycles: int, n_int: int) -> 
         + cycles * (n_acc * 32_000)
         + n_int * 490_000
     )
-    # ArbOS Stylus AOT averages ~7.2 ink per WASM instruction (10,000 ink = 1 gas)
     compute_ink = int(wasm_instructions * 7.2)
     compute_gas = (compute_ink + 9_999) // 10_000
 
-    cold_sloads = 3 + 2 * n_acc + n_obs + n_acc
-    warm_sstores = 1 + 2 * n_acc + n_obs + n_acc
-    keccak_calls = 3 * n_acc + n_obs + 2 * n_int
+    cold_sloads = 8 + 2 * n_acc + n_obs + n_acc + n_int
+    warm_sstores = 1 + 2 * n_acc + n_obs + n_acc + n_int
+    keccak_calls = 3 * n_acc + n_obs + 3 * n_int
     hostio_calls = cold_sloads + warm_sstores + keccak_calls + n_int + 4
+    memory_grow_gas = 4_096
+    l2_calldata_bytes = 64 * n_acc + 160 * n_obs + 720 * n_int
+    l2_calldata_gas_shared = l2_calldata_bytes * 10
 
     hostio_storage_gas = (
         21_000
         + 352
+        + memory_grow_gas
         + cold_sloads * 2_100
         + warm_sstores * 5_000
         + n_int * 3_000
@@ -201,6 +208,11 @@ def estimate_stylus_metrics(n_acc: int, n_obs: int, cycles: int, n_int: int) -> 
         "cycles_eliminated": cycles,
         "intents": n_int,
         "wasm_instructions": wasm_instructions,
+        "cold_sloads": cold_sloads,
+        "warm_sstores": warm_sstores,
+        "memory_grow_gas": memory_grow_gas,
+        "l2_calldata_bytes": l2_calldata_bytes,
+        "l2_calldata_gas_shared_both_vms": l2_calldata_gas_shared,
         "hostio_calls": hostio_calls,
         "stylus_ink": total_ink,
         "stylus_compute_gas": compute_gas,
@@ -238,7 +250,8 @@ def main() -> int:
             {
                 "generator": "scripts/measure-wasm-benchmarks.py",
                 "isomorphic_to": "contracts/test/ClearingDifferential.t.sol:ClearingBenchmarkGas",
-                "calibration_note": "Host-verified Rust execution (identical cycle topology & matched volume) + transparent ArbOS HostIO pricing (10,000 ink = 1 gas). On-chain eth_estimateGas & evm_ink_left() calibration runs during live testnet deployment.",
+                "model_type": "host_verified_rust_replay_plus_arbos_hostio_model",
+                "calibration_note": "Offline analytical proxy: Rust clearing-cli replay verifies isomorphic cycle topology & matched volume; WASM compute ink is analytically modeled and combined with complete EIP-2929 HostIO cold-storage pricing (including 8 config slots, all get_partial_fill cold SLOADs, and memory_grow). Live on-chain eth_estimateGas & evm_ink_left() calibration runs upon testnet deployment.",
                 "tiers": tiers_out,
             },
             indent=2,

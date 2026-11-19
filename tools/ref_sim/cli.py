@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -22,7 +22,7 @@ from tools.ref_sim.engine import ClearingError, execute_clearing_batch
 WAD = 10**18
 
 
-def build_golden_vectors() -> List[Dict[str, Any]]:
+def build_golden_vectors() -> list[dict[str, Any]]:
     chain_id = 421614
     contract = "0x2222222222222222222222222222222222222222"
     pk1 = 0x1010101010101010101010101010101010101010101010101010101010101010
@@ -77,7 +77,7 @@ def build_golden_vectors() -> List[Dict[str, Any]]:
     sig1 = sign_trade_intent(pk1, chain_id, contract, 1, 0, 0, 2 * WAD, 2510 * WAD, 100, nonce1)
     sig2 = sign_trade_intent(pk2, chain_id, contract, 1, 0, 1, 2 * WAD, 2490 * WAD, 100, nonce2)
 
-    v1_input: Dict[str, Any] = {
+    v1_input: dict[str, Any] = {
         "batch_epoch": 42,
         "block_timestamp": 1000,
         "max_price_staleness": 3600,
@@ -149,7 +149,7 @@ def build_golden_vectors() -> List[Dict[str, Any]]:
     }
     v1_receipt = execute_clearing_batch(v1_input)
 
-    v2_f01_attack: Dict[str, Any] = {
+    v2_f01_attack: dict[str, Any] = {
         "batch_epoch": 43,
         "block_timestamp": 1000,
         "max_price_staleness": 3600,
@@ -176,7 +176,7 @@ def build_golden_vectors() -> List[Dict[str, Any]]:
         "nonce_bitmaps": {},
     }
 
-    v3_margin_rollback: Dict[str, Any] = {
+    v3_margin_rollback: dict[str, Any] = {
         "batch_epoch": 44,
         "block_timestamp": 1000,
         "max_price_staleness": 3600,
@@ -220,7 +220,7 @@ def build_golden_vectors() -> List[Dict[str, Any]]:
         "nonce_bitmaps": {},
     }
 
-    v4_stale_oracle: Dict[str, Any] = {
+    v4_stale_oracle: dict[str, Any] = {
         "batch_epoch": 45,
         "block_timestamp": 6000,
         "max_price_staleness": 3600,
