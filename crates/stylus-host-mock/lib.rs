@@ -224,7 +224,8 @@ impl HostEnv {
                 )
             }
         };
-        if status != 0 {
+        const MAX_RETURN_DATA_BYTES: usize = 64;
+        if status != 0 || ret_len > MAX_RETURN_DATA_BYTES {
             return None;
         }
         let mut ret = vec![0u8; ret_len];

@@ -948,4 +948,22 @@ contract ClearingBenchmarkGas {
         require(sim.maxPriceDeviationBps() == 2000, "maxPriceDeviationBps getter");
         require(!sim.approvedSolvers(address(0x1234)), "approvedSolvers getter");
     }
+
+    function testV120_DustCollateralDeadlockBrokenAndErrorPrecedence() public {
+        SolidityClearingBenchmark sim = new SolidityClearingBenchmark(address(this), true);
+        sim.configureAsset(0, address(0), 6, WAD, 0, 500, 250);
+        sim.configureAsset(1, address(0), 18, 2000 * WAD, 1000, 1000, 500);
+        // Error precedence parity: invalid assetId/decimals precedes InvalidHaircut
+        vm.expectRevert(ISettlementEngine.InvalidAssetConfig.selector);
+        sim.configureAsset(5, address(0), 18, WAD, 10000, 500, 250);
+        // Dust collateral (< MIN_INTENT_AMOUNT_WAD = 1e9) must NOT deadlock absorbBadDebt
+        address victim = address(0xBEEF);
+        sim.seedAccountBalance(victim, 0, -int256(10 * WAD));
+        sim.seedAccountBalance(victim, 1, 500);
+        sim.seedAccountBalance(address(this), 0, int256(100 * WAD));
+        uint256 absorbed = sim.absorbBadDebt(victim, 0);
+        require(absorbed == 10 * WAD, "absorbed bad debt mismatch");
+        require(sim.getAccountBalance(victim, 0) == 0 && sim.getAccountBalance(victim, 1) == 0, "victim must be cleared");
+        require(sim.getFeeVault(1) == 500, "dust collateral must sweep to fee vault");
+    }
 }

@@ -202,7 +202,16 @@ fn parse_address_hex(s: &str) -> Result<Address, String> {
         .map_err(|e| format!("invalid Address '{s}': {e}"))
 }
 
+const MAX_INPUT_BYTES: u64 = 4 * 1024 * 1024;
+
 fn run_replay(path: &str) -> Result<(), String> {
+    let meta = fs::metadata(path).map_err(|e| format!("stat {path}: {e}"))?;
+    if meta.len() > MAX_INPUT_BYTES {
+        return Err(format!(
+            "input file {path} exceeds {MAX_INPUT_BYTES} byte limit ({} bytes)",
+            meta.len()
+        ));
+    }
     let raw = fs::read_to_string(path).map_err(|e| format!("read {path}: {e}"))?;
     let jb: JsonBatch = serde_json::from_str(&raw).map_err(|e| format!("json parse: {e}"))?;
 
@@ -433,8 +442,20 @@ fn run_replay(path: &str) -> Result<(), String> {
 }
 
 fn run_benchmark_report() -> Result<(), String> {
-    let report_path = Path::new("docs/benchmarks/gas-comparison-report.md");
-    let content = fs::read_to_string(report_path).map_err(|e| {
+    let rel = Path::new("docs/benchmarks/gas-comparison-report.md");
+    let report_path = if rel.exists() {
+        rel.to_path_buf()
+    } else if let Ok(exe) = env::current_exe() {
+        exe.ancestors()
+            .find_map(|anc| {
+                let cand = anc.join(rel);
+                cand.exists().then_some(cand)
+            })
+            .unwrap_or_else(|| rel.to_path_buf())
+    } else {
+        rel.to_path_buf()
+    };
+    let content = fs::read_to_string(&report_path).map_err(|e| {
         format!(
             "failed to read authoritative benchmark report {}: {e}",
             report_path.display()

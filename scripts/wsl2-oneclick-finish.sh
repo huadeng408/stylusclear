@@ -1,75 +1,66 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# StylusClear v1.1.0 Minimal Irreducible Local Finisher (WSL2 Ubuntu 22.04/24.04)
-# Broadcasts pre-verified artifacts/clearing_stylus.wasm + Solidity contracts to
-# Arbitrum Sepolia (421614) and Robinhood Chain Testnet (46630), then builds demo-final.mp4.
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-ENTITY_DIR="${STYLUSCLEAR_ENTITY_DIR:-$ROOT_DIR/../代码任务所需实体}"
-CACHE_DIR="$HOME/.cache/stylusclear_entity_sandbox"
+export PATH="$HOME/.foundry/bin:$HOME/.cargo/bin:/usr/local/bin:$PATH"
+OFFLINE_TOOLCHAIN_DIR="${STYLUSCLEAR_ENTITY_DIR:-}"
+RUN_FULL_VERIFY="${RUN_FULL_VERIFY:-0}"
+SKIP_DEPLOY=0
+LIVE_CLIP=""
 
-if ! command -v forge >/dev/null 2>&1 && [[ -f "$ENTITY_DIR/bootstrap_sandbox.py" ]]; then
-  echo "[wsl2-finish] Bootstrapping offline toolchain from $ENTITY_DIR..."
-  python3 "$ENTITY_DIR/bootstrap_sandbox.py" --src "$ENTITY_DIR" --dst "$CACHE_DIR" --modules 01,02,03,06,07
+for arg in "$@"; do
+  case "$arg" in
+    --verify|-verify) RUN_FULL_VERIFY=1 ;;
+    --skip-deploy) SKIP_DEPLOY=1 ;;
+    *)
+      if [[ -z "$LIVE_CLIP" && -f "$arg" ]]; then
+        LIVE_CLIP="$arg"
+      fi
+      ;;
+  esac
+done
+
+echo "[wsl2-finish] Repo root: $ROOT_DIR"
+if [[ -n "$OFFLINE_TOOLCHAIN_DIR" && -d "$OFFLINE_TOOLCHAIN_DIR" ]]; then
+  echo "[wsl2-finish] Offline toolchain dir: $OFFLINE_TOOLCHAIN_DIR"
 fi
 
-if [[ -f "$CACHE_DIR/activate_env.sh" ]]; then
-  # shellcheck disable=SC1091
-  source "$CACHE_DIR/activate_env.sh"
-fi
-
-# Safe NODE_PATH handling under set -u (prevents unbound variable crash)
-NODE_PATH="${NODE_PATH:-}"
-if [[ -d "$ROOT_DIR/web/node_modules" ]]; then
-  NODE_PATH="${ROOT_DIR}/web/node_modules${NODE_PATH:+:$NODE_PATH}"
-fi
-export NODE_PATH="${NODE_PATH%:}"
-
-# PEP 668 safe brotli check on Ubuntu 24.04 cp312
-if ! python3 -c "import brotli" >/dev/null 2>&1; then
-  if ! command -v brotli >/dev/null 2>&1; then
-    python3 -m pip install --user --break-system-packages brotli >/dev/null 2>&1 || true
-  fi
-fi
-
-if [[ "${RUN_FULL_VERIFY:-0}" == "1" || "${1:-}" == "--verify" ]]; then
+if [[ "$RUN_FULL_VERIFY" == "1" ]]; then
+  echo "[wsl2-finish] Running full 5-stage judge verification..."
   bash scripts/verify-judge-60s.sh
-else
-  echo "[oneclick] Fast broadcast mode (all 7 CI gates pre-verified in cloud; pass --verify to re-run locally)"
 fi
 
-if [[ -n "${PRIVATE_KEY:-}" ]]; then
-  bash scripts/deploy-sepolia.sh
+if [[ "$SKIP_DEPLOY" == "0" ]]; then
+  if [[ -z "${PRIVATE_KEY:-}" ]]; then
+    echo "ERROR: PRIVATE_KEY is not set. Run via 2-DEPLOY-AND-PUSH.cmd (masked SecureString prompt) or pass --skip-deploy." >&2
+    exit 1
+  fi
+  if ! command -v cast >/dev/null 2>&1; then
+    echo "ERROR: Foundry 'cast' is required on PATH inside WSL2 (install Foundry via foundryup)." >&2
+    exit 1
+  fi
+  echo "[wsl2-finish] Deploying to Arbitrum Sepolia (421614) via cloud-precompiled artifacts..."
+  REQUIRE_STYLUS="${REQUIRE_STYLUS:-1}" USE_ATOMIC_FACTORY="${USE_ATOMIC_FACTORY:-1}" bash scripts/deploy-sepolia.sh
   bash scripts/demo-sepolia-live.sh sepolia
   if [[ "${SKIP_ROBINHOOD:-0}" != "1" ]]; then
-    bash scripts/deploy-robinhood-testnet.sh
+    echo "[wsl2-finish] Deploying to Robinhood Chain Testnet (46630) via cloud-precompiled artifacts..."
+    REQUIRE_STYLUS="${REQUIRE_STYLUS:-1}" USE_ATOMIC_FACTORY="${USE_ATOMIC_FACTORY:-1}" bash scripts/deploy-robinhood-testnet.sh
     bash scripts/demo-sepolia-live.sh robinhood
   fi
 fi
 
-VIDEO_KIT_DIR="${STYLUSCLEAR_VIDEO_KIT_DIR:-$ROOT_DIR/docs/assets/video_kit}"
-if [[ ! -f "$VIDEO_KIT_DIR/master_audio.m4a" && ! -f "$VIDEO_KIT_DIR/master_audio.wav" ]]; then
-  SIBLING_KIT="$ROOT_DIR/../project5-stylus-clearing-engine/docs/assets/video_kit"
-  if [[ -d "$SIBLING_KIT" ]]; then
-    VIDEO_KIT_DIR="$SIBLING_KIT"
-    export STYLUSCLEAR_VIDEO_KIT_DIR="$VIDEO_KIT_DIR"
-  fi
-fi
-
-if [[ -f "$VIDEO_KIT_DIR/master_audio.m4a" || -f "$VIDEO_KIT_DIR/master_audio.wav" ]]; then
-  if ! command -v ffmpeg >/dev/null 2>&1; then
-    echo "[ERROR] ffmpeg not found in PATH. Install ffmpeg or mount 视频制作所需实体/05_ffmpeg_latest_gpl." >&2
+if [[ -n "$LIVE_CLIP" ]]; then
+  if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+    echo "ERROR: ffmpeg and ffprobe are required on PATH to assemble the final 1080p60 demo video." >&2
     exit 1
   fi
-  if [[ -n "${LIVE_CLIP_PATH:-}" && -f "${LIVE_CLIP_PATH}" ]]; then
-  bash scripts/build-final-video.sh "$LIVE_CLIP_PATH" "$ROOT_DIR/docs/assets/demo-final.mp4"
+  echo "[wsl2-finish] Assembling final 1080p60 video with live clip: $LIVE_CLIP"
+  bash scripts/build-final-video.sh "$LIVE_CLIP"
 else
-  echo "[oneclick] Reusing cloud-rendered 1080p60 demo-preview.mp4 (set LIVE_CLIP_PATH to splice a 32s live clip)"
-fi
-else
-  echo "[wsl2-finish] INFO: video_kit audio not found in $VIDEO_KIT_DIR; copy docs/assets/video_kit from Drive or set STYLUSCLEAR_VIDEO_KIT_DIR to build demo-final.mp4."
+  echo "[wsl2-finish] No live recording clip supplied; skipping final MP4 assembly."
+  echo "[wsl2-finish] NOTE: Never submit an older pre-v1.2.0 MP4 with v1.2.0 metrics. Re-record live clip and run: bash scripts/build-final-video.sh <clip.mp4>"
 fi
 
-echo "[wsl2-finish] Complete."
+echo "[wsl2-finish] Complete. Review 'git status' then run: git add deployments web/deployments docs/benchmarks web/benchmarks.generated.mjs docs/assets && git commit -m 'chore: record live testnet deployments and benchmarks' && git push origin main"

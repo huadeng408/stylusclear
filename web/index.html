@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https: http://127.0.0.1:* http://localhost:*; img-src 'self' data:;" />
-  <title>StylusClear v1.1.0 — Multilateral Clearing & Margin Workbench</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'none'; connect-src 'self' https://sepolia-rollup.arbitrum.io https://rpc.testnet.chain.robinhood.com http://127.0.0.1:* http://localhost:*; img-src 'self' data:;" />
+  <title>StylusClear v1.2.0 — Multilateral Clearing &amp; Margin Workbench</title>
   <style>
     :root {
       --bg: #070b14;
@@ -28,10 +28,10 @@
       min-height: 100vh;
     }
     header {
-      display: flex; justify-content: space-between; align-items: center;
+      display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
       padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 16px;
     }
-    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .badge {
       background: rgba(40, 215, 255, 0.13); color: var(--cyan);
       border: 1px solid rgba(40, 215, 255, 0.4); padding: 4px 10px;
@@ -55,25 +55,31 @@
       background: linear-gradient(135deg, #16b8f3, #2979ff); color: #fff; border: none;
       border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
     }
-    .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
     .kpi {
       background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+      min-width: 0;
     }
     .kpi .k-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .kpi .k-val { font-size: 20px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .kpi .k-val { font-size: 20px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
     .kpi .k-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
-    .main-grid { display: grid; grid-template-columns: 1.05fr 1.35fr; gap: 14px; margin-bottom: 14px; }
+    .main-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.35fr); gap: 14px; margin-bottom: 14px; }
     .card {
       background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+      min-width: 0; overflow: hidden;
     }
-    .card h2 { font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .card h2 {
+      font-size: 14px; font-weight: 600; margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .table-wrap { width: 100%; overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
     th, td { padding: 7px 8px; text-align: right; border-bottom: 1px solid rgba(30, 45, 77, 0.65); }
     th:first-child, td:first-child { text-align: left; }
     th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
-    .bottom-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
+    .bottom-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
     .guard-banner {
-      display: none; margin-bottom: 14px; padding: 12px 16px; border-radius: 10px;
+      display: none; margin-bottom: 14px; padding: 12px 16px; border-radius: 10px; gap: 10px; flex-wrap: wrap;
       background: rgba(255, 84, 112, 0.12); border: 1px solid rgba(255, 84, 112, 0.55);
       color: #ffd7df; font-size: 13px;
     }
@@ -81,10 +87,11 @@
     .mono { font-family: "JetBrains Mono", "Fira Code", monospace; }
     button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
     @media (max-width: 900px) {
-      header, .controls-bar { flex-direction: column; align-items: stretch; }
+      body { padding: 12px 12px; }
+      header { flex-direction: column; align-items: stretch; }
+      .controls-bar { grid-template-columns: 1fr; }
       .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .main-grid { grid-template-columns: 1fr; }
-      table { display: block; overflow-x: auto; }
+      .main-grid, .bottom-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -92,13 +99,13 @@
   <header>
     <div>
       <div class="brand">
-        <h1>StylusClear v1.1.0</h1>
-        <span class="badge">WASM 1.0 MVP · 24,484 B Brotli-q11</span>
+        <h1>StylusClear v1.2.0</h1>
+        <span class="badge" id="wasmHeaderBadge">WASM 1.0 MVP · 24,518 B Brotli-q11</span>
         <span class="badge green" id="z3Badge">Z3 6/6 UNSAT · 100/100 CLI Fuzz</span>
       </div>
       <div class="subtitle">Solverless Multilateral Obligation Compression + 512-Bit UCPBA + Adaptive Floor Liquidation</div>
     </div>
-    <div style="display:flex; gap:8px; align-items:center;">
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <span class="badge" id="chainBadge">Arbitrum Sepolia (421614)</span>
       <span class="badge green" id="statusBadge" aria-live="polite">SETTLED · ATOMIC</span>
     </div>
@@ -131,8 +138,8 @@
       </select>
     </div>
     <div>
-      <label for="deskSlider">O(V²) BFS Mesh Scale: <span id="deskCountLabel">12</span> Desks (<span id="meshLatencyLabel">0.4 ms</span>)</label>
-      <input type="range" id="deskSlider" min="4" max="64" step="4" value="12" />
+      <label for="deskSlider">O(V²) BFS Mesh Scale: <span id="deskCountLabel">4</span> Desks (<span id="meshLatencyLabel">0.10 ms</span>)</label>
+      <input type="range" id="deskSlider" min="4" max="64" step="4" value="4" />
     </div>
     <div>
       <button id="runSimBtn" type="button">Verify Dual-VM Parity</button>
@@ -157,13 +164,13 @@
     </div>
     <div class="kpi">
       <div class="k-label">Stylus WASM Binary</div>
-      <div class="k-val" id="kpiWasm">24,484 B</div>
+      <div class="k-val" id="kpiWasm">24,518 B</div>
       <div class="k-sub">Brotli-q11 (&lt; 24 KiB &amp; 96 KB ArbOS 61)</div>
     </div>
     <div class="kpi">
       <div class="k-label">Stress Gas (44 Desks)</div>
-      <div class="k-val" id="kpiGasCompare">2.26M vs 18.30M</div>
-      <div class="k-sub" id="kpiSpeedup">Stylus vs Cold EVM (&lt;32M Block Cap)</div>
+      <div class="k-val" id="kpiGasCompare">2.92M vs 16.65M</div>
+      <div class="k-sub" id="kpiSpeedup">5.71x Exec (4.69x E2E) · &lt; 32M Cap</div>
     </div>
   </section>
 
@@ -171,7 +178,7 @@
     <div class="card">
       <h2>
         <span>Canonical 2-Origin BFS Obligation Mesh</span>
-        <span class="mono" style="font-size:11px;color:var(--cyan);" id="meshSummaryBadge">4 Nodes · Unique Rank IDs</span>
+        <span class="mono" style="font-size:11px;color:var(--cyan);" id="meshSummaryBadge">4 Nodes · 2 Cycles Netted</span>
       </h2>
       <svg id="meshSvg" role="img" aria-label="Canonical 2-Origin BFS Multilateral Obligation Mesh" viewBox="0 0 460 250" style="width:100%;height:245px;background:#080e1c;border-radius:8px;border:1px solid #182542;"></svg>
     </div>
@@ -181,43 +188,47 @@
         <span>4-Asset Portfolio Ledger &amp; Post-Batch Margin Health</span>
         <span class="mono" style="font-size:11px;color:var(--green);">Slots 0..3 (USDC/USDG · WETH · ARB · NVDAx)</span>
       </h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Participant</th>
-            <th>USDC / USDG</th>
-            <th>WETH</th>
-            <th>ARB</th>
-            <th>NVDAx (RWA)</th>
-            <th>Health ($)</th>
-            <th>IM Surplus ($)</th>
-          </tr>
-        </thead>
-        <tbody id="portfolioBody"></tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Participant</th>
+              <th>USDC / USDG</th>
+              <th>WETH</th>
+              <th>ARB</th>
+              <th>NVDAx (RWA)</th>
+              <th>Health ($)</th>
+              <th>IM Surplus ($)</th>
+            </tr>
+          </thead>
+          <tbody id="portfolioBody"></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
   <section class="bottom-grid">
     <div class="card">
       <h2>
-        <span>Cold-Storage EVM (vm.cool, runs=200) vs Stylus Analytical HostIO Model</span>
+        <span>Cold-Storage EVM (vm.cool, runs=200) vs Stylus HostIO Model</span>
         <span class="mono" style="font-size:11px;color:var(--amber);">solc 0.8.38 via_ir · Arbitrum 32M Cap</span>
       </h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Workload Tier</th>
-            <th>Desks / Obs / Intents</th>
-            <th>Cycles</th>
-            <th>Cold EVM Gas</th>
-            <th>Analytical WASM Ops</th>
-            <th>Stylus Gas Est.</th>
-            <th>Gas Saved</th>
-          </tr>
-        </thead>
-        <tbody id="benchBody"></tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Workload Tier</th>
+              <th>Desks / Obs / Intents</th>
+              <th>Cycles</th>
+              <th>Cold EVM Gas</th>
+              <th>Analytical WASM Ops</th>
+              <th>Stylus Gas Est.</th>
+              <th>Gas Saved</th>
+            </tr>
+          </thead>
+          <tbody id="benchBody"></tbody>
+        </table>
+      </div>
     </div>
 
     <div class="card">
@@ -229,237 +240,6 @@
     </div>
   </section>
 
-  <script type="module">
-    import {
-      MEASURED_BENCHMARK_SUMMARY,
-      PRESET_SCENARIOS,
-      STANDARD_ASSETS,
-      WAD,
-      buildLiveScenarioPayloads,
-      evaluateAccountRisk,
-      previewUnderwaterLiquidation,
-      simulateScaleMeshFast,
-    } from "./engine-ui.mjs";
-
-    const fmtWad = (v, digits = 2) => {
-      const sign = v < 0n ? "-" : "";
-      const abs = v < 0n ? -v : v;
-      const scale = 10n ** BigInt(digits);
-      const scaled = (abs * scale) / WAD;
-      const whole = scaled / scale;
-      const frac = (scaled % scale).toString().padStart(digits, "0");
-      return `${sign}${whole.toLocaleString("en-US")}.${frac}`;
-    };
-
-    function renderBenchTable() {
-      const tbody = document.getElementById("benchBody");
-      tbody.innerHTML = MEASURED_BENCHMARK_SUMMARY.workloads.map((w) => `
-        <tr>
-          <td><strong>${w.tier}</strong></td>
-          <td>${w.accounts} / ${w.obligations} / ${w.intents}</td>
-          <td>${w.cycles_eliminated}</td>
-          <td class="mono">${w.solidity_evm_gas.toLocaleString("en-US")}</td>
-          <td class="mono">${w.wasm_instructions.toLocaleString("en-US")}</td>
-          <td class="mono" style="color:var(--cyan);">${w.stylus_total_gas_est.toLocaleString("en-US")}</td>
-          <td style="color:var(--green);font-weight:700;">-${w.gas_reduction_pct.toFixed(1)}% (${w.speedup_x.toFixed(1)}x)</td>
-        </tr>
-      `).join("");
-      const stress = MEASURED_BENCHMARK_SUMMARY.workloads[3];
-      document.getElementById("kpiWasm").textContent = `${MEASURED_BENCHMARK_SUMMARY.wasmBrotliBytes.toLocaleString("en-US")} B`;
-      document.getElementById("kpiGasCompare").textContent =
-        `${(stress.stylus_total_gas_est / 1e6).toFixed(2)}M vs ${(stress.solidity_evm_gas / 1e6).toFixed(2)}M`;
-      document.getElementById("kpiSpeedup").textContent =
-        `${stress.speedup_x.toFixed(1)}x Cheaper · Cold EVM < 32M Cap`;
-    }
-
-    function renderLiquidationCard() {
-      const p1 = previewUnderwaterLiquidation({
-        underwaterBalances: [2900n * WAD, -1n * WAD, 0n, 0n],
-        liquidatorBalances: [15000n * WAD, 5n * WAD, 0n, 0n],
-        debtAsset: 1,
-        collateralAsset: 0,
-        repayAmountWad: 400000000000000000n,
-      });
-      const p2 = previewUnderwaterLiquidation({
-        underwaterBalances: [1000n * WAD, -1n * WAD, 0n, 0n],
-        liquidatorBalances: [15000n * WAD, 5n * WAD, 0n, 0n],
-        debtAsset: 1,
-        collateralAsset: 0,
-        repayAmountWad: 1n * WAD,
-      });
-      document.getElementById("liqPreviewBox").innerHTML = `
-        <div style="margin-bottom:8px;padding:8px 10px;background:#091122;border-radius:8px;border:1px solid #1c2c4c;">
-          <strong style="color:var(--cyan);">1. Partial Repay (Sufficient Collateral):</strong>
-          Repay <span class="mono">0.40 WETH</span> debt &rarr; Seize <span class="mono">$${fmtWad(p1.seizedCollateralWad)} USDC</span>
-          (<span class="mono">${p1.bonusBps} bps</span> bonus). Borrower Health:
-          <span class="mono" style="color:var(--red);">$${fmtWad(p1.preHealthWad)}</span> &rarr;
-          <span class="mono" style="color:var(--green);">$${fmtWad(p1.postHealthWad)}</span>.
-        </div>
-        <div style="padding:8px 10px;background:#091122;border-radius:8px;border:1px solid #1c2c4c;">
-          <strong style="color:var(--amber);">2. Floor Proportional Cap (1,000 USDC Cap):</strong>
-          Request <span class="mono">1.00 WETH</span> &rarr; Capped Seize <span class="mono">$${fmtWad(p2.seizedCollateralWad)} USDC</span>,
-          Floor Back-Calculated Repay <span class="mono">${fmtWad(p2.repaidDebtWad, 6)} WETH</span> (Zero Overcharge).
-        </div>
-      `;
-    }
-
-    function renderMeshSvg(nDesks, scenario) {
-      const t0 = performance.now();
-      const mesh = simulateScaleMeshFast(nDesks);
-      const dt = (performance.now() - t0).toFixed(2);
-      document.getElementById("deskCountLabel").textContent = String(mesh.deskCount);
-      document.getElementById("meshLatencyLabel").textContent = `${dt} ms`;
-      document.getElementById("meshSummaryBadge").textContent = scenario && scenario.expectedError ? `${mesh.deskCount} Nodes · 0 Cycles Netted (Atomic Rollback)` : `${mesh.deskCount} Nodes · ${mesh.deskCount === (scenario?.desks?.length || 0) ? scenario.cyclesEliminated : mesh.cyclesEliminated} Cycles Netted (${Number(mesh.compressionRatioPct).toFixed(2)}%)`;
-
-      const svg = document.getElementById("meshSvg");
-      const cx = 230, cy = 125, rx = 165, ry = 88;
-      const coords = mesh.nodeLabels.map((lbl, idx) => {
-        const ang = -Math.PI / 2 + (2 * Math.PI * idx) / mesh.deskCount;
-        return { lbl, x: cx + rx * Math.cos(ang), y: cy + ry * Math.sin(ang) };
-      });
-      const edgeStroke = scenario.expectedError ? "#ff5470" : "#28d7ff";
-      const lines = mesh.edges.slice(0, 96).map((e) => {
-        const a = coords[e.debtor], b = coords[e.creditor];
-        return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${edgeStroke}" stroke-opacity="0.34" stroke-width="1.4" />`;
-      }).join("");
-      const showAllText = mesh.deskCount <= 16;
-      const nodes = coords.map((c, idx) => {
-        const r = mesh.deskCount <= 8 ? 16 : (mesh.deskCount <= 24 ? 10 : 5.5);
-        const showLbl = showAllText || idx % 4 === 0;
-        return `
-          <g>
-            <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${r}" fill="#112244" stroke="${edgeStroke}" stroke-width="1.8" />
-            ${showLbl ? `<text x="${c.x.toFixed(1)}" y="${c.y.toFixed(1)}" text-anchor="middle" dominant-baseline="central" fill="#eef4ff" font-size="${mesh.deskCount <= 8 ? 9.5 : 8.5}" font-weight="600">${c.lbl}</text>` : ""}
-          </g>
-        `;
-      }).join("");
-      svg.innerHTML = lines + nodes;
-    }
-
-    function applyScenario(scenarioId) {
-      const sc = PRESET_SCENARIOS[scenarioId] || PRESET_SCENARIOS.institutionalMesh;
-      const banner = document.getElementById("guardBanner");
-      const statusBadge = document.getElementById("statusBadge");
-
-      if (sc.expectedError) {
-        banner.classList.add("visible");
-        document.getElementById("guardErrorName").textContent = sc.expectedError;
-        document.getElementById("guardReason").textContent = sc.matchedVolumeSummary;
-        statusBadge.textContent = `BLOCKED · ${sc.expectedError}`;
-        statusBadge.className = "badge red";
-      } else {
-        banner.classList.remove("visible");
-        statusBadge.textContent = "SETTLED · ATOMIC PARITY";
-        statusBadge.className = "badge green";
-      }
-
-
-      const netVal = document.getElementById("networkSelect").value;
-      document.getElementById("chainBadge").textContent =
-        netVal === "46630" ? "Robinhood Chain Testnet (46630)" : "Arbitrum Sepolia (421614)";
-
-      document.getElementById("kpiGross").textContent = `$${sc.grossObligationUsd}`;
-      document.getElementById("kpiResidual").textContent = sc.expectedError ? sc.netResidualUsd : `$${sc.netResidualUsd}`;
-      document.getElementById("kpiResidual").style.color = sc.expectedError ? "var(--red)" : "var(--green)";
-      document.getElementById("kpiCycles").textContent = `${sc.cyclesEliminated} Multilateral Cycles Eliminated`;
-      document.getElementById("kpiMatched").textContent = sc.matchedVolumeSummary;
-      const grossNum = Number(String(sc.grossObligationUsd).replace(/[^0-9.]/g, "")) || 0;
-      const residNum = Number(String(sc.netResidualUsd).replace(/[^0-9.]/g, "")) || 0;
-      const compEl = document.getElementById("kpiCompression");
-      if (sc.expectedError) {
-        compEl.textContent = "0.00% (Atomic Rollback)";
-      } else if (grossNum > 0) {
-        const pct = ((1 - residNum / grossNum) * 100).toFixed(2);
-        compEl.textContent = `${pct}% Liquidity Saved`;
-      }
-
-      const tbody = document.getElementById("portfolioBody");
-      tbody.innerHTML = sc.desks.map((d) => {
-        const risk = evaluateAccountRisk(d.balances, STANDARD_ASSETS);
-        const hCol = risk.healthWad >= 0n ? "var(--green)" : "var(--red)";
-        return `
-          <tr>
-            <td><strong>${d.shortLabel}</strong> <span class="mono" style="color:var(--muted);font-size:10.5px;">${d.address.slice(0, 6)}..${d.address.slice(-4)}</span></td>
-            <td class="mono">${fmtWad(d.balances[0])}</td>
-            <td class="mono">${fmtWad(d.balances[1])}</td>
-            <td class="mono">${fmtWad(d.balances[2])}</td>
-            <td class="mono">${fmtWad(d.balances[3])}</td>
-            <td class="mono" style="color:${hCol};">$${fmtWad(risk.healthWad)}</td>
-            <td class="mono">$${fmtWad(risk.imSurplusWad)}</td>
-          </tr>
-        `;
-      }).join("");
-
-      const sliderVal = Number(document.getElementById("deskSlider").value);
-      renderMeshSvg(sliderVal, sc);
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const rawScenario = params.get("scenario") || "institutionalMesh";
-    const initScenario = Object.prototype.hasOwnProperty.call(PRESET_SCENARIOS, rawScenario) ? rawScenario : "institutionalMesh";
-    const rawDesks = Number(params.get("desks") || "12");
-    const initDesks = Number.isFinite(rawDesks) && rawDesks >= 4 && rawDesks <= 64 ? rawDesks : 12;
-    document.getElementById("scenarioSelect").value = initScenario;
-    document.getElementById("deskSlider").value = String(initDesks);
-
-    document.getElementById("scenarioSelect").addEventListener("change", (e) => {
-      if (e.target.value === "robinhoodUsdgMesh") {
-        document.getElementById("networkSelect").value = "46630";
-      }
-      applyScenario(e.target.value);
-    });
-    document.getElementById("networkSelect").addEventListener("change", () => applyScenario(document.getElementById("scenarioSelect").value));
-    document.getElementById("deskSlider").addEventListener("input", (e) => {
-      const sc = PRESET_SCENARIOS[document.getElementById("scenarioSelect").value];
-      renderMeshSvg(Number(e.target.value), sc);
-    });
-    let latestRpcReqId = 0;
-    async function runLiveDualVmParity() {
-      const reqId = ++latestRpcReqId;
-      const scenarioId = document.getElementById("scenarioSelect").value;
-      applyScenario(scenarioId);
-      const netVal = document.getElementById("networkSelect").value;
-      const manifestUrl = netVal === "46630" ? "./deployments/robinhood-testnet.json" : "./deployments/arbitrum-sepolia.json";
-      const badge = document.getElementById("statusBadge");
-      try {
-        const res = await fetch(manifestUrl);
-        if (!res.ok || reqId !== latestRpcReqId) return;
-        const cfg = await res.json();
-        const { isValidDeployedAddress, simulateSettleBatchKeyless } = await import("./dist/rpc-client.mjs");
-        if (reqId !== latestRpcReqId) return;
-        const targets = [
-          isValidDeployedAddress(cfg.stylusEngineAddress) ? { vm: "Stylus", addr: cfg.stylusEngineAddress } : null,
-          isValidDeployedAddress(cfg.solidityBenchmarkAddress) ? { vm: "Solidity", addr: cfg.solidityBenchmarkAddress } : null,
-        ].filter(Boolean);
-        if (targets.length === 0) {
-          badge.textContent = "LOCAL PARITY VERIFIED · AWAITING LIVE DEPLOY";
-          return;
-        }
-        const payload = buildLiveScenarioPayloads(scenarioId, cfg);
-        const results = await Promise.all(
-          targets.map((t) => simulateSettleBatchKeyless({ rpcUrl: cfg.rpcUrl, engineAddress: t.addr, ...payload }))
-        );
-        if (reqId !== latestRpcReqId) return;
-        const first = results[0];
-        const dualMatch = results.length < 2 || (results[0].ok === results[1].ok && results[0].errorName === results[1].errorName);
-        badge.className = first.ok && dualMatch ? "badge green" : "badge red";
-        badge.textContent = !dualMatch
-          ? "LIVE DUAL-VM MISMATCH"
-          : first.ok
-            ? `LIVE ${results.length === 2 ? "DUAL-VM" : "RPC"} PARITY · SETTLED`
-            : `LIVE ${results.length === 2 ? "DUAL-VM" : "RPC"} REVERT · ${first.errorName || "GUARDED"}`;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        badge.textContent = window.location.protocol === "file:"
-          ? "LOCAL PARITY VERIFIED · OFFLINE PREVIEW"
-          : `RPC ERROR · ${msg.slice(0, 48)}`;
-      }
-    }
-    document.getElementById("runSimBtn").addEventListener("click", runLiveDualVmParity);
-
-    renderBenchTable();
-    renderLiquidationCard();
-    applyScenario(initScenario);
-  </script>
+  <script type="module" src="./app.mjs"></script>
 </body>
 </html>

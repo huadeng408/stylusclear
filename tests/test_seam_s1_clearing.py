@@ -137,3 +137,46 @@ def test_s1_v10_edge_guards() -> None:
             }
         )
     assert exc_zero.value.code == "InvalidAssetConfig"
+
+
+def test_v120_dust_collateral_full_clearance_and_strict_map_validation() -> None:
+    from tools.ref_sim.engine import AssetRiskConfig, ClearingEngineError, execute_underwater_liquidation
+
+    assets = [
+        AssetRiskConfig(0, 6, 10**18, 1000, 0, 500, 250),
+        AssetRiskConfig(1, 18, 2000 * 10**18, 1000, 1000, 1000, 500),
+    ]
+    # Full collateral clearance with small remaining collateral (< MIN_INTENT_AMOUNT_WAD repay) must succeed
+    res = execute_underwater_liquidation(
+        assets=assets,
+        underwater_balances=[-10 * 10**18, 10**5],  # 1e5 wei WETH = $0.0002 -> back_repay < 1e9
+        liquidator_balances=[100 * 10**18, 0],
+        debt_asset=0,
+        collateral_asset=1,
+        repay_amount_wad=10**18,
+        block_timestamp=1000,
+        max_price_staleness=3600,
+    )
+    assert res.seized_collateral_wad == 10**5
+    assert res.repaid_debt_wad > 0
+
+    # Malformed nonce_bitmaps key must raise ClearingEngineError, not be silently dropped
+    with pytest.raises(ClearingEngineError, match="InvalidIntent"):
+        from tools.ref_sim.engine import execute_batch_payload
+
+        execute_batch_payload(
+            {
+                "chain_id": 421614,
+                "verifying_contract": "0x" + "11" * 20,
+                "caller": "0x" + "aa" * 20,
+                "batch_epoch": 1,
+                "block_timestamp": 1000,
+                "assets": [
+                    {"asset_id": 0, "decimals": 6, "mark_price_wad": str(10**18), "price_updated_at": 1000, "haircut_bps": 0, "im_bps": 500, "mm_bps": 250}
+                ],
+                "accounts": [{"address": "0x" + "aa" * 20, "balances": [str(10**18)]}],
+                "obligations": [],
+                "intents": [],
+                "nonce_bitmaps": {"malformed_key": "1"},
+            }
+        )

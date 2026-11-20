@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# StylusClear v1.1.0 Fast Judge Verification (< 30 seconds)
+# StylusClear v1.2.0 Fast Judge Verification (< 60 seconds)
 START_TS="$(date +%s)"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -23,13 +23,13 @@ wasm-opt --mvp-features -O0 artifacts/clearing_stylus.wasm -o /dev/null
 python3 scripts/generate-benchmarks.py --verify-only
 
 echo "=== [2/5] Rust Clippy (-D warnings), Core/Stylus Tests & CLI Build ==="
-cargo clippy "${CARGO_VENDOR_OPTS[@]}" --locked "${OFFLINE_ARG[@]}" --workspace --all-targets -- -D warnings
-cargo test "${CARGO_VENDOR_OPTS[@]}" --locked "${OFFLINE_ARG[@]}" --workspace --quiet
-cargo build "${CARGO_VENDOR_OPTS[@]}" --locked "${OFFLINE_ARG[@]}" --release --bin clearing-cli --quiet
+cargo clippy ${CARGO_VENDOR_OPTS[@]+"${CARGO_VENDOR_OPTS[@]}"} --locked ${OFFLINE_ARG[@]+"${OFFLINE_ARG[@]}"} --workspace --all-targets -- -D warnings
+cargo test ${CARGO_VENDOR_OPTS[@]+"${CARGO_VENDOR_OPTS[@]}"} --locked ${OFFLINE_ARG[@]+"${OFFLINE_ARG[@]}"} --workspace --quiet
+cargo build ${CARGO_VENDOR_OPTS[@]+"${CARGO_VENDOR_OPTS[@]}"} --locked ${OFFLINE_ARG[@]+"${OFFLINE_ARG[@]}"} --release --bin clearing-cli --quiet
 
 echo "=== [3/5] Foundry Differential & Cold-Storage Gas Suite ==="
 SOLC_OPT=(); if command -v solc >/dev/null 2>&1; then SOLC_OPT=(--use "$(command -v solc)"); fi
-forge test "${SOLC_OPT[@]}" "${OFFLINE_ARG[@]}"
+forge test ${SOLC_OPT[@]+"${SOLC_OPT[@]}"} ${OFFLINE_ARG[@]+"${OFFLINE_ARG[@]}"}
 
 echo "=== [4/5] Z3 Formal SMT Proofs (6 Theorems + 100/100 CLI Fuzz) & Seam S1/S2/S4 ==="
 TMP_Z3_OUT="$(mktemp)"

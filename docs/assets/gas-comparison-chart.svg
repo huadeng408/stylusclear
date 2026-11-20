@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" font-family="Inter, system-ui, -apple-system, sans-serif">
+  <rect width="1120" height="560" rx="14" fill="#0b1120"/>
+  <rect x="14" y="14" width="1092" height="532" rx="10" fill="#0f172a" stroke="#1e293b" stroke-width="1.5"/>
+  <text x="28" y="48" fill="#f8fafc" font-size="21" font-weight="700">StylusClear v1.2.0 — Cold-Storage EVM vs. Stylus WASM Gas &amp; 24 KiB Budget</text>
+  <text x="28" y="72" fill="#94a3b8" font-size="12">Solidity solc 0.8.38 (via_ir=true, optimizer_runs=200, vm.cool()) vs. Stylus HostIO (20k cold nonce SSTORE + quadratic memory_grow)</text>
+  <rect x="860" y="34" width="12" height="12" rx="2" fill="#ef4444"/>
+  <text x="878" y="44" fill="#cbd5e1" font-size="12">Solidity EVM Cold</text>
+  <rect x="860" y="54" width="12" height="12" rx="2" fill="#38bdf8"/>
+  <text x="878" y="64" fill="#cbd5e1" font-size="12">Stylus WASM + HostIO</text>
+  <text x="28" y="126" fill="#e2e8f0" font-size="14" font-weight="700">Small</text>
+  <text x="28" y="144" fill="#94a3b8" font-size="11">4d / 2c / 4i</text>
+  <rect x="100" y="108" width="19.5" height="20" rx="4" fill="#ef4444" opacity="0.88"/>
+  <text x="127.5" y="123" fill="#fca5a5" font-size="12" font-family="monospace">449,659 gas (EVM)</text>
+  <rect x="100" y="134" width="11.4" height="20" rx="4" fill="#38bdf8"/>
+  <text x="119.4" y="149" fill="#bae6fd" font-size="12" font-family="monospace">264,463 gas (Stylus · -41.2% · 1.70x exec / 1.61x e2e)</text>
+  <text x="28" y="210" fill="#e2e8f0" font-size="14" font-weight="700">Medium</text>
+  <text x="28" y="228" fill="#94a3b8" font-size="11">12d / 9c / 24i</text>
+  <rect x="100" y="192" width="101.3" height="20" rx="4" fill="#ef4444" opacity="0.88"/>
+  <text x="209.3" y="207" fill="#fca5a5" font-size="12" font-family="monospace">2,342,677 gas (EVM)</text>
+  <rect x="100" y="218" width="34.5" height="20" rx="4" fill="#38bdf8"/>
+  <text x="142.5" y="233" fill="#bae6fd" font-size="12" font-family="monospace">796,605 gas (Stylus · -66.0% · 2.94x exec / 2.53x e2e)</text>
+  <text x="28" y="294" fill="#e2e8f0" font-size="14" font-weight="700">Large</text>
+  <text x="28" y="312" fill="#94a3b8" font-size="11">32d / 33c / 64i</text>
+  <rect x="100" y="276" width="425.8" height="20" rx="4" fill="#ef4444" opacity="0.88"/>
+  <text x="533.8" y="291" fill="#fca5a5" font-size="12" font-family="monospace">9,843,744 gas (EVM)</text>
+  <rect x="100" y="302" width="92.0" height="20" rx="4" fill="#38bdf8"/>
+  <text x="200.0" y="317" fill="#bae6fd" font-size="12" font-family="monospace">2,127,903 gas (Stylus · -78.4% · 4.63x exec / 3.85x e2e)</text>
+  <text x="28" y="378" fill="#e2e8f0" font-size="14" font-weight="700">Stress</text>
+  <text x="28" y="396" fill="#94a3b8" font-size="11">44d / 45c / 88i</text>
+  <rect x="100" y="360" width="720.0" height="20" rx="4" fill="#ef4444" opacity="0.88"/>
+  <text x="828.0" y="375" fill="#fca5a5" font-size="12" font-family="monospace">16,645,399 gas (EVM)</text>
+  <rect x="100" y="386" width="126.2" height="20" rx="4" fill="#38bdf8"/>
+  <text x="234.2" y="401" fill="#bae6fd" font-size="12" font-family="monospace">2,917,316 gas (Stylus · -82.5% · 5.71x exec / 4.69x e2e)</text>
+  <line x1="28" y1="454" x2="1092" y2="454" stroke="#1e293b" stroke-width="1"/>
+  <text x="28" y="480" fill="#e2e8f0" font-size="13" font-weight="700">Stylus WASM 1.0 MVP Legacy 24 KiB Activation Budget (24,522 B / 24,576 B · 54 B headroom · 0 float / 0 post-MVP)</text>
+  <rect x="28" y="492" width="860" height="20" rx="5" fill="#1e293b"/>
+  <rect x="28" y="492" width="858.1" height="20" rx="5" fill="#10b981"/>
+  <text x="902" y="507" fill="#6ee7b7" font-size="12" font-family="monospace">99.78% used</text>
+  <text x="28" y="534" fill="#64748b" font-size="11">SHA-256: c2f3244ddeca5c54e9ac47be27caabd38f50d7cfc6b3af19457db98f5f4588b3 | Calibration: host_replay_analytical_and_foundry_measured | ArbOS 61 96 KiB headroom: 73,782 B</text>
+</svg>

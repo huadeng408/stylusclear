@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "z3_version": "4.15.4",
   "theorems_proved": 6,
   "all_unsat": true,
@@ -7,37 +7,37 @@
     {
       "theorem": "T1_U256_Adaptive_Bonus_Zero_Deadlock",
       "status": "PROVED_UNSAT",
-      "elapsed_ms": 142.78,
-      "description": "Over full two-step cross-asset mulDivFloor sizing (p_d, p_c, haircut_c in [0, 5000] bps, mm_bps in [2, 10000]), adaptive bonus = min(mm_bps // 2, 250) never overflows and strictly improves borrower health (mm_drop > eff_drop)."
+      "elapsed_ms": 50.76,
+      "description": "Over full two-step cross-asset mulDivFloor sizing (p_d, p_c, haircut_c in [0, 9999] bps, mm_bps in [2, 10000]), adaptive bonus = min(mm_bps // 2, 250) never overflows and strictly improves borrower health (mm_drop > eff_drop)."
     },
     {
       "theorem": "T2_Floor_Proportional_Cap_Bound",
       "status": "PROVED_UNSAT",
-      "elapsed_ms": 45.6,
+      "elapsed_ms": 15.24,
       "description": "When raw_seize > avail_coll, two-step floor back-calculation guarantees back_repay * p_d * (10000 + bonus) <= avail_coll * p_c * 10000 AND strictly bounds borrower rounding loss to < 2 rounding quanta."
     },
     {
       "theorem": "T3_UCPBA_Individual_Rationality_And_Bounded_Dust",
       "status": "PROVED_UNSAT",
-      "elapsed_ms": 22.67,
-      "description": "Over UCPBA clearing price clear_p with buy_lim >= clear_p >= sell_lim, directional ceil/floor settlement guarantees 0 <= dust <= 1 wei, buy_pay >= sell_recv, sandwich bounds, and exact IR preservation on aligned fills."
+      "elapsed_ms": 8.08,
+      "description": "Over UCPBA clearing price clear_p with buy_lim >= clear_p >= sell_lim, directional ceil/floor settlement guarantees 0 <= dust <= 1 wei, buy_pay >= sell_recv, exact IR on aligned fills, and strict <1 wei rounding bound on unaligned fills."
     },
     {
       "theorem": "T4_FullDomain_U512_FullMath_Overflow_And_Carry_Guard",
       "status": "PROVED_UNSAT",
-      "elapsed_ms": 10.73,
+      "elapsed_ms": 3.47,
       "description": "Over the full machine domain a,b in [0, 2^256-1], d in [1, 2^256-1] matching FullMath512.sol and clearing-core/math.rs, the guard (d > prod1) guarantees q_floor <= U256_MAX with q_floor*d <= a*b <= q_ceil*d, and the ceil carry guard (q_floor < U256_MAX when rem > 0) prevents U256 overflow."
     },
     {
       "theorem": "T5_U256_MultiDecimal_Vault_Solvency",
       "status": "PROVED_UNSAT",
-      "elapsed_ms": 7.78,
-      "description": "Over explicit vault_physical_raw and multi-account 6/8/18-decimal balances up to 10^24 raw units, WAD scaling never overflows U256 and after any valid withdrawal the vault remains 100% solvent for all remaining depositors."
+      "elapsed_ms": 8.47,
+      "description": "Over a non-trivial 4-step transition (multi-decimal deposits, UCPBA ceil/floor dust, floored raw withdrawal, sweepDustToFeeVault/bad-debt dust confiscation, and floored fee sweep), physical vault reserves never underflow and strictly cover all remaining user claims + fee dust."
     },
     {
       "theorem": "T6_BitVec256_SubQuantum_Debt_Exit_Guarantee",
       "status": "PROVED_UNSAT",
-      "elapsed_ms": 5993.68,
+      "elapsed_ms": 2495.35,
       "description": "Over full BitVec(256) arithmetic for 6/8-decimal assets (received_raw in [1, 10^24]), repaySubQuantumDebt with transfer_from_checked strictly clears any sub-quantum negative balance to > 0 (and < 1 quantum for 1-unit transfers) without wraparound."
     }
   ],
@@ -45,8 +45,8 @@
     "examples_checked": 100,
     "cli_binary_differential_examples": 100,
     "cli_replay_cross_checked": true,
-    "partial_fill_cases_exercised": 47,
-    "non_crossing_cases_exercised": 29,
+    "partial_fill_cases_exercised": 32,
+    "non_crossing_cases_exercised": 37,
     "fields_cross_checked": [
       "cycles_eliminated",
       "clearing_price_wad",

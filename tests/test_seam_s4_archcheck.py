@@ -23,7 +23,24 @@ def test_s4_negative_mutations_caught(tmp_path: Path) -> None:
         "README.md",
         "SUBMISSION.md",
         "Dockerfile.stylus-reproducible",
+        "2-DEPLOY-AND-PUSH.cmd",
+        "SHA256SUMS.txt",
         "artifacts/clearing_stylus.wasm",
+        "artifacts/clearing_stylus.initcode.hex",
+        "artifacts/contracts-compiled.json",
+        "web/app.mjs",
+        "web/index.html",
+        "web/rpc-client.ts",
+        "docs/assets/gas-comparison-chart.svg",
+        "docs/assets/gas-comparison-chart.png",
+        "docs/assets/workbench-institutional-mesh.png",
+        "docs/assets/workbench-fail-closed-guard.png",
+        "docs/benchmarks/gas-comparison-report.md",
+        "web/engine-ui.mjs",
+        "web/benchmarks.generated.mjs",
+        "web/dist/rpc-client.mjs",
+        "scripts/verify-web-e2e-chromium.py",
+        ".github/workflows/ci.yml",
         "contracts/src/ISettlementEngine.sol",
         "contracts/src/SolidityClearingBenchmark.sol",
         "contracts/src/StylusAtomicFactory.sol",
@@ -63,3 +80,10 @@ def test_s4_negative_mutations_caught(tmp_path: Path) -> None:
     # Negative 3: missing --locked in Dockerfile
     (tmp_path / "Dockerfile.stylus-reproducible").write_text("FROM rust:1.85\nCOPY Cargo.toml ./\n", encoding="utf-8")
     assert any("--locked" in e for e in check_repo(tmp_path, strict=True))
+
+
+def test_s4_catches_broken_ps1_param_order() -> None:
+    from tools.archcheck.check import _check_ps1_param_order
+
+    assert _check_ps1_param_order('param([string]$TargetDir = "C:\\a")\n$ErrorActionPreference = "Stop"\n') is True
+    assert _check_ps1_param_order('$ErrorActionPreference = "Stop"\nparam([string]$TargetDir = "C:\\a")\n') is False

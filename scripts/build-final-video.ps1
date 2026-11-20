@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -20,7 +20,7 @@ try {
 
 $ForwardedArgs = @()
 foreach ($a in $args) {
-    if ($a -match '^[A-Za-z]:\\') {
+    if ($a -match '^[A-Za-z]:[\\/]') {
         $conv = (wsl wslpath -a "$a" 2>$null | Out-String).Trim()
         if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($conv)) {
             $ForwardedArgs += $conv

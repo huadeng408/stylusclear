@@ -14,3 +14,5 @@
 *.mp4 binary
 *.wav binary
 *.bundle binary
+*.cmd text eol=crlf
+*.bat text eol=crlf

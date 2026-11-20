@@ -1,7 +1,7 @@
-# SPEC-001: StylusClear — Solver-Less Multilateral Obligation Netting & Portfolio-Margined Batch Clearing Engine (v1.1.0 Final Hardened)
+# SPEC-001: StylusClear — Solver-Less Multilateral Obligation Netting & Portfolio-Margined Batch Clearing Engine (v1.2.0 Final Hardened)
 
-- **Status**: `accepted-v1.1.0` (`v1.1.0` — incorporates `ADR-0001`–`ADR-0010` and `TKT-001`–`TKT-025`)
-- **Target Competition**: [Arbitrum Open House: Online Buildathon](https://www.hackquest.io/hackathons/Arbitrum-Open-House-Arbitrum Open House-Online-Buildathon) & [Arbitrum Mentorship / Ecosystem Tracks](https://blog.arbitrum.foundation/from-founder-house-singapore-to-market-300k-for-9-standout-teams/) (`DeFi` + `Institutional RWA / Stablecoin Clearing`)
+- **Status**: `accepted-v1.2.0` (`v1.2.0` — incorporates `ADR-0001`–`ADR-0010` and `TKT-001`–`TKT-025`)
+- **Target Competition**: [Arbitrum Open House: Online Buildathon](https://arbitrum.foundation/) & [Arbitrum Mentorship / Ecosystem Tracks](https://blog.arbitrum.foundation/from-founder-house-singapore-to-market-300k-for-9-standout-teams/) (`DeFi` + `Institutional RWA / Stablecoin Clearing`)
 - **Ubiquitous Language**: Governed strictly by [`CONTEXT.md`](../../CONTEXT.md) (`Rule A1`)
 
 ## 1. Problem Statement & Why Solver-Less On-Chain WASM?
@@ -10,7 +10,7 @@ Intent protocols (CoW Protocol, UniswapX) rely on off-chain solvers to compute s
 
 `StylusClear` eliminates off-chain solver trust entirely: the **canonical O(V²) 2-Origin BFS cycle compression + monotonic UCPBA + portfolio margin engine runs 100% on-chain inside Arbitrum Stylus WASM linear memory**, flushing only net balance deltas to storage.
 
-## 2. v1.1.0 Hardened Protocol Architecture
+## 2. v1.2.0 Hardened Protocol Architecture
 
 Aligned with the [Stylus Activation Pause Notice](https://docs.arbitrum.io/notices/stylus-activation-pause-notice) and [[Constitutional] AIP: Stylus Activation Contract (`AIP-31605`)](https://forum.arbitrum.foundation/t/constitutional-aip-stylus-activation-contract/31605), `StylusClear` targets **Arbitrum Sepolia (`421614`)**, **[Robinhood Chain Testnet (`46630`)](https://docs.robinhood.com/chain/connecting/)** ([USDG Stablecoin Track](https://grants.watch/programs/arbitrum-stablecoin-growth-program)), and **Arbitrum Orbit L3 (`42161405`)**:
 

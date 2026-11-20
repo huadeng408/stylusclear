@@ -158,9 +158,21 @@ export async function simulateSettleBatchKeyless(args: LiveBatchCallArgs): Promi
     };
   }
   const parsedUrl = new URL(args.rpcUrl);
+  if (parsedUrl.username || parsedUrl.password) {
+    throw new Error("RPC URL must not embed credentials");
+  }
   const isLocal = parsedUrl.hostname === "127.0.0.1" || parsedUrl.hostname === "localhost";
+  const trustedHosts = new Set([
+    "sepolia-rollup.arbitrum.io",
+    "rpc.testnet.chain.robinhood.com",
+    "127.0.0.1",
+    "localhost",
+  ]);
   if (parsedUrl.protocol !== "https:" && !(parsedUrl.protocol === "http:" && isLocal)) {
     throw new Error(`Unsupported RPC URL protocol: ${parsedUrl.protocol}`);
+  }
+  if (!trustedHosts.has(parsedUrl.hostname)) {
+    throw new Error(`Untrusted RPC host: ${parsedUrl.hostname}`);
   }
   const client = createPublicClient({ transport: http(args.rpcUrl, { timeout: 15_000 }) });
   const chainIdBig = args.chainId !== undefined ? normalizeBigIntId(args.chainId) : BigInt(await client.getChainId());
@@ -234,6 +246,6 @@ function extractRevertHex(err: unknown): string | null {
     cur = cur.cause;
   }
   const fullMsg = err instanceof Error ? err.message : String(err);
-  const m = fullMsg.match(/(?:data|revert(?:ed)?[^0-9a-fA-F]*)(0x[0-9a-fA-F]{8})(?![0-9a-fA-F])/i);
+  const m = fullMsg.match(/(?:data|revert(?:ed)?[^0-9a-fA-F]*)(0x[0-9a-fA-F]{8}(?:[0-9a-fA-F]{2})*)/i);
   return m ? m[1] : null;
 }

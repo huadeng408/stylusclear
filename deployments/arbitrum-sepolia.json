@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "network": "arbitrum-sepolia",
   "chainId": 421614,
   "rpcUrl": "https://sepolia-rollup.arbitrum.io/rpc",

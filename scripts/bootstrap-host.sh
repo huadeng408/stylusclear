@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-echo "[bootstrap-host] Verifying required local tools for StylusClear v1.0.0..."
+echo "[bootstrap-host] Verifying required local tools for StylusClear v1.2.0..."
 missing=0
 for cmd in git rustc cargo forge cast anvil solc wasm-opt brotli python3 node ffmpeg; do
   if command -v "$cmd" >/dev/null 2>&1; then

@@ -1,0 +1,11 @@
+# TKT-028: v1.2.0 4-Agent Red-Team Audit Closure & Cloud-Exhausted Hardening
+
+* **Status**: Completed (`v1.2.0`)
+* **Blocked by**: `TKT-027`
+* **Testing Seam**: Seam S1 (`clearing-core` / `tools/ref_sim`), Seam S2 (`ClearingDifferential.t.sol` / `clearing-stylus` / `prove_invariants_z3.py`), Seam S3 (`web/app.mjs` / `web/engine-ui.mjs` / `verify-web-e2e-chromium.py`), Seam S4 (`tools/archcheck/check.py` / `scripts/check.sh`)
+
+## Scope Closed
+1. **Dust Collateral Deadlock Immunity + Return-Data Bomb Cap + Dual-VM Parity**: Added `full_coll_clearance` exemption in `liquidate` across Rust/Solidity/Python, sub-`MIN_INTENT_AMOUNT_WAD` dust confiscation to `fee_vault` during `absorbBadDebt` under strict CEI, 64-byte `MAX_RETURN_DATA_BYTES` guard in `stylus-host-mock::raw_call`, compact 4 KB `_authenticateIntents` bitmap in Solidity (`24,514 B`), `configureAsset`/`repaySubQuantumDebt` error precedence alignment, and 4 MiB input size guard in `clearing-cli`.
+2. **Non-Trivial Z3 Proofs & Honest Dual-Metric Benchmarks**: Replaced tautological `T5` with a 4-step vault transition proof, aligned `T1` (`haircut_c in [0, 9999]`) and `T3` unaligned `<1 wei` bounds, charged full `20,000`-gas cold nonce SSTOREs + quadratic `memory_grow` in Stylus HostIO benchmarks (`5.71x` exec / `4.69x` e2e at Stress), and generated deterministic SVG + 2x Retina PNG charts.
+3. **Web Workbench Security & Authenticity**: Extracted `web/app.mjs`, removed `'unsafe-inline'` from `script-src` CSP, eliminated all `innerHTML` calls, added RPC credential/host validation, differentiated settled post-batch vs rollback balances, fixed keyless `oracleBandGuard` probe, and enforced 3-viewport Headless Chromium E2E (`1440x980`, `768x1024`, `390x844`).
+4. **Windows 11 / macOS / WSL2 & CI Hardening**: Fixed `UNPACK-TO-C-DRIVE.ps1` `param()` syntax & `git fetch` branch handling, added pure ASCII `1-UNPACK-TO-C.cmd` & `2-DEPLOY-AND-PUSH.cmd` with masked `SecureString` key input, fixed `WSLENV` passthrough, added idempotent checkpointed precompiled deployment (`contracts-compiled.json`) + `topic0` log extraction, fixed `demo-sepolia-live.sh` `STYLUS_ADDR` & per-network telemetry, added `ffprobe` gates in `build-final-video.sh`, made `check.sh` zero-pollution, and enforced 7 new static gates in `archcheck --strict` + `SHA256SUMS.txt`.

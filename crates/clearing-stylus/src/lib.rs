@@ -356,7 +356,6 @@ impl StylusClearingEngine {
 
     #[inline(never)]
     fn require_admin(&self) -> Result<(Address, bool, bool, u8, u64), ClearingError> {
-        self.check_non_reentrant()?;
         let h = self.read_header();
         if h.0.is_zero() || self.vm().msg_sender() != h.0 {
             return Err(ClearingError::UnauthorizedCaller);
@@ -474,6 +473,14 @@ impl StylusClearingEngine {
     #[inline]
     fn set_fee(&mut self, asset_id: u8, val: &U256) {
         self.set_u256_u8(NS_FEES, asset_id, val);
+    }
+
+    #[inline(never)]
+    fn credit_fee(&mut self, asset_id: u8, delta: &U256) -> Result<(), ClearingError> {
+        let mut f = self.get_fee(asset_id);
+        uadd_assign(&mut f, delta)?;
+        self.set_fee(asset_id, &f);
+        Ok(())
     }
 
     #[inline]
@@ -634,7 +641,6 @@ impl StylusClearingEngine {
 
     #[inline(never)]
     fn ctor_impl(&mut self, admin: Address, seeding: bool) -> Result<(), ClearingError> {
-        self.check_non_reentrant()?;
         let (cur_admin, _, _, _, _) = self.read_header();
         if !cur_admin.is_zero() || admin.is_zero() {
             return Err(ClearingError::UnauthorizedCaller);
@@ -662,7 +668,6 @@ impl StylusClearingEngine {
 
     #[inline(never)]
     fn accept_admin_impl(&mut self) -> Result<(), ClearingError> {
-        self.check_non_reentrant()?;
         let pending = addr_from_prefix(&self.sload(&word_u8(SLOT_PENDING_ADMIN)), 12);
         let sender = self.vm().msg_sender();
         if pending.is_zero() || sender != pending {
@@ -825,7 +830,6 @@ impl StylusClearingEngine {
 
     #[inline(never)]
     fn deposit_impl(&mut self, asset_id: u8, raw_amount: &U256, out: &mut I256) -> Result<(), ClearingError> {
-        self.check_non_reentrant()?;
         let (_, _, _, cur_count, _) = self.read_header();
         if asset_id >= cur_count || raw_amount.is_zero() {
             return Err(ClearingError::InvalidAssetConfig);
@@ -857,7 +861,6 @@ impl StylusClearingEngine {
 
     #[inline(never)]
     fn withdraw_impl(&mut self, asset_id: u8, raw_amount: &U256, out: &mut I256) -> Result<(), ClearingError> {
-        self.check_non_reentrant()?;
         let (_, _, _, cur_count, _) = self.read_header();
         let n_assets = usize::from(cur_count);
         if usize::from(asset_id) >= n_assets || raw_amount.is_zero() {
@@ -907,7 +910,6 @@ impl StylusClearingEngine {
 
     #[inline(never)]
     fn repay_sub_quantum_debt_impl(&mut self, asset_id: u8, out: &mut I256) -> Result<(), ClearingError> {
-        self.check_non_reentrant()?;
         let (_, _, _, cur_count, _) = self.read_header();
         if asset_id >= cur_count {
             return Err(ClearingError::InvalidAssetConfig);
@@ -955,14 +957,15 @@ impl StylusClearingEngine {
         debt_asset: u8,
         absorbed_out: &mut U256,
     ) -> Result<(), ClearingError> {
-        self.check_non_reentrant()?;
         let (admin, _, _, cur_count, _) = self.read_header();
         let n_assets = usize::from(cur_count);
         if underwater.is_zero() || usize::from(debt_asset) >= n_assets {
             return Err(ClearingError::InvalidAssetConfig);
         }
+        let min_lot = U256::from(clearing_core::MIN_INTENT_AMOUNT_U64);
         for a in 0..n_assets {
-            if self.get_bal(underwater, a as u8).is_positive() {
+            let b = self.get_bal(underwater, a as u8);
+            if b.is_positive() && cmp_u256(&b.into_raw(), &min_lot).is_ge() {
                 return Err(ClearingError::InvalidIntent);
             }
         }
@@ -981,7 +984,6 @@ impl StylusClearingEngine {
         } else if caller == admin {
             let mut rem = abs_debt;
             usub_assign(&mut rem, &fee_bal)?;
-            self.set_fee(debt_asset, &U256::ZERO);
             let mut rem_i = I256::ZERO;
             u2i_ref(&rem, &mut rem_i)?;
             let mut a_bal = self.get_bal(admin, debt_asset);
@@ -990,12 +992,21 @@ impl StylusClearingEngine {
             }
             isub_assign(&mut a_bal, &rem_i)?;
             self.check_post_withdrawal_margin(admin, n_assets, debt_asset, &a_bal, true)?;
+            self.set_fee(debt_asset, &U256::ZERO);
             self.set_bal(admin, debt_asset, &a_bal);
         } else {
             return Err(ClearingError::InsufficientWithdrawableBalance);
         }
 
-        self.set_bal(underwater, debt_asset, &I256::ZERO);
+        for a in 0..n_assets {
+            let b = self.get_bal(underwater, a as u8);
+            if b.is_positive() || a == usize::from(debt_asset) {
+                if b.is_positive() {
+                    self.credit_fee(a as u8, &b.into_raw())?;
+                }
+                self.set_bal(underwater, a as u8, &I256::ZERO);
+            }
+        }
         self.emit_words(
             b"BadDebtAbsorbed(address,address,uint8,uint256)" as &[u8],
             &[word_addr(caller), word_addr(underwater), word_u8(debt_asset), u256_be(&abs_debt)],
@@ -1007,7 +1018,6 @@ impl StylusClearingEngine {
 
     #[inline(never)]
     fn sweep_dust_impl(&mut self, asset_id: u8, dust_out: &mut U256) -> Result<(), ClearingError> {
-        self.check_non_reentrant()?;
         let (_, _, _, cur_count, _) = self.read_header();
         let n_assets = usize::from(cur_count);
         if usize::from(asset_id) >= n_assets {
@@ -1066,6 +1076,7 @@ impl StylusClearingEngine {
         if avail_wad.is_zero() {
             return Err(ClearingError::InsufficientWithdrawableBalance);
         }
+        let mut raw_amount = U256::ZERO;
         if rec.token.is_zero() {
             self.set_fee(asset_id, &U256::ZERO);
             let mut d_i = I256::ZERO;
@@ -1073,36 +1084,30 @@ impl StylusClearingEngine {
             let mut r_bal = self.get_bal(recipient, asset_id);
             iadd_assign(&mut r_bal, &d_i)?;
             self.set_bal(recipient, asset_id, &r_bal);
-            self.emit_words(
-                b"FeeVaultSwept(address,uint8,uint256,uint256)" as &[u8],
-                &[word_addr(recipient), word_u8(asset_id), u256_be(&avail_wad), [0u8; 32]],
-                3,
-            );
             *swept_out = avail_wad;
-            return Ok(());
+        } else {
+            let quantum = pow10_u256(18 - rec.cfg.decimals)?;
+            let mut rem_wad = U256::ZERO;
+            div_rem_u256_ref(&avail_wad, &quantum, &mut raw_amount, &mut rem_wad)?;
+            if raw_amount.is_zero() {
+                return Err(ClearingError::InsufficientWithdrawableBalance);
+            }
+            let mut v_raw = self.get_vault_raw(asset_id);
+            if cmp_u256(&v_raw, &raw_amount).is_lt() {
+                return Err(ClearingError::InsufficientWithdrawableBalance);
+            }
+            let Some(live_b) = self.query_erc20_balance(rec.token, self.vm().contract_address()) else {
+                return Err(ClearingError::InsufficientWithdrawableBalance);
+            };
+            if cmp_u256(&live_b, &raw_amount).is_lt() {
+                return Err(ClearingError::InsufficientWithdrawableBalance);
+            }
+            usub_assign(&mut v_raw, &raw_amount)?;
+            umul_ref(&raw_amount, &quantum, swept_out)?;
+            self.set_fee(asset_id, &rem_wad);
+            self.set_vault_raw(asset_id, &v_raw);
+            self.call_erc20_xfer(rec.token, None, recipient, &raw_amount)?;
         }
-        let quantum = pow10_u256(18 - rec.cfg.decimals)?;
-        let mut raw_amount = U256::ZERO;
-        let mut rem_wad = U256::ZERO;
-        div_rem_u256_ref(&avail_wad, &quantum, &mut raw_amount, &mut rem_wad)?;
-        if raw_amount.is_zero() {
-            return Err(ClearingError::InsufficientWithdrawableBalance);
-        }
-        let mut v_raw = self.get_vault_raw(asset_id);
-        if cmp_u256(&v_raw, &raw_amount).is_lt() {
-            return Err(ClearingError::InsufficientWithdrawableBalance);
-        }
-        let Some(live_b) = self.query_erc20_balance(rec.token, self.vm().contract_address()) else {
-            return Err(ClearingError::InsufficientWithdrawableBalance);
-        };
-        if cmp_u256(&live_b, &raw_amount).is_lt() {
-            return Err(ClearingError::InsufficientWithdrawableBalance);
-        }
-        usub_assign(&mut v_raw, &raw_amount)?;
-        umul_ref(&raw_amount, &quantum, swept_out)?;
-        self.set_fee(asset_id, &rem_wad);
-        self.set_vault_raw(asset_id, &v_raw);
-        self.call_erc20_xfer(rec.token, None, recipient, &raw_amount)?;
         self.emit_words(
             b"FeeVaultSwept(address,uint8,uint256,uint256)" as &[u8],
             &[
@@ -1125,7 +1130,6 @@ impl StylusClearingEngine {
         revoke: bool,
         out: &mut U256,
     ) -> Result<(), ClearingError> {
-        self.check_non_reentrant()?;
         let (_, _, _, cur_count, _) = self.read_header();
         let debtor = self.vm().msg_sender();
         if creditor.is_zero()
@@ -1160,7 +1164,6 @@ impl StylusClearingEngine {
         mask: &U256,
         out: &mut U256,
     ) -> Result<(), ClearingError> {
-        self.check_non_reentrant()?;
         if mask.is_zero() {
             return Err(ClearingError::InvalidIntent);
         }
@@ -1186,7 +1189,6 @@ impl StylusClearingEngine {
         repaid_out: &mut U256,
         seized_out: &mut U256,
     ) -> Result<(), ClearingError> {
-        self.check_non_reentrant()?;
         let liquidator = self.vm().msg_sender();
         if underwater.is_zero() || underwater == liquidator {
             return Err(ClearingError::InvalidIntent);
@@ -1248,7 +1250,6 @@ impl StylusClearingEngine {
 
     #[inline(never)]
     fn get_risk_impl(&self, trader: Address, out: &mut AccountRiskMetrics) -> Result<(), ClearingError> {
-        self.check_non_reentrant()?;
         let (_, _, _, cur_count, _) = self.read_header();
         let n_assets = usize::from(cur_count);
         let assets = self.load_asset_configs(n_assets);
@@ -1273,7 +1274,6 @@ impl StylusClearingEngine {
         raw_intents: &[RawTradeIntentDto],
         vol_out: &mut U256,
     ) -> Result<u32, ClearingError> {
-        self.check_non_reentrant()?;
         let caller = self.vm().msg_sender();
         let (admin, seeding, permissionless, cur_count, batch_epoch) = self.read_header();
         if !permissionless && !self.is_solver(caller) {
@@ -1409,9 +1409,7 @@ impl StylusClearingEngine {
         for (a, d) in receipt.fee_vault_deltas.iter().enumerate() {
             if !d.is_zero() {
                 let a_u8 = a as u8;
-                let mut next = self.get_fee(a_u8);
-                uadd_assign(&mut next, d)?;
-                self.set_fee(a_u8, &next);
+                self.credit_fee(a_u8, d)?;
             }
         }
 
@@ -1726,6 +1724,7 @@ fn dispatch_words(
     let mut u1 = U256::ZERO;
     let mut i0 = I256::ZERO;
 
+    storage.check_non_reentrant()?;
     match selector {
         SEL_INITIALIZE | SEL_CTOR_SNAKE | SEL_CTOR_CAMEL | SEL_CTOR_NOARG => {
             if selector == SEL_CTOR_NOARG {
@@ -1748,7 +1747,6 @@ fn dispatch_words(
             Ok(0)
         }
         SEL_PENDING_ADMIN => {
-            storage.check_non_reentrant()?;
             let _ = AbiCursor::new_exact(input, 0)?;
             out[0] = word_addr(addr_from_prefix(&storage.sload(&word_u8(SLOT_PENDING_ADMIN)), 12));
             Ok(1)
@@ -1866,61 +1864,51 @@ fn dispatch_words(
             Ok(2)
         }
         SEL_ADMIN => {
-            storage.check_non_reentrant()?;
             let _ = AbiCursor::new_exact(input, 0)?;
             out[0] = word_addr(storage.read_header().0);
             Ok(1)
         }
         SEL_BENCHMARK_SEEDING => {
-            storage.check_non_reentrant()?;
             let _ = AbiCursor::new_exact(input, 0)?;
             out[0] = word_bool(storage.read_header().1);
             Ok(1)
         }
         SEL_PERM_SOLVER => {
-            storage.check_non_reentrant()?;
             let _ = AbiCursor::new_exact(input, 0)?;
             out[0] = word_bool(storage.read_header().2);
             Ok(1)
         }
         SEL_MAX_STALE => {
-            storage.check_non_reentrant()?;
             let _ = AbiCursor::new_exact(input, 0)?;
             out[0] = word_u64(storage.read_risk_windows().0);
             Ok(1)
         }
         SEL_MAX_DEV => {
-            storage.check_non_reentrant()?;
             let _ = AbiCursor::new_exact(input, 0)?;
             out[0] = word_u16(storage.read_risk_windows().1);
             Ok(1)
         }
         SEL_APPROVED_SOLVERS => {
-            storage.check_non_reentrant()?;
             let mut c = AbiCursor::new_exact(input, 32)?;
             out[0] = word_bool(storage.is_solver(c.addr()?));
             Ok(1)
         }
         SEL_ASSET_COUNT => {
-            storage.check_non_reentrant()?;
             let _ = AbiCursor::new_exact(input, 0)?;
             out[0] = word_u8(storage.read_header().3);
             Ok(1)
         }
         SEL_CUR_EPOCH => {
-            storage.check_non_reentrant()?;
             let _ = AbiCursor::new_exact(input, 0)?;
             out[0] = word_u64(storage.read_header().4);
             Ok(1)
         }
         SEL_DOM_SEP => {
-            storage.check_non_reentrant()?;
             let _ = AbiCursor::new_exact(input, 0)?;
             out[0] = storage.domain_separator().0;
             Ok(1)
         }
         SEL_GET_BAL => {
-            storage.check_non_reentrant()?;
             let mut c = AbiCursor::new_exact(input, 64)?;
             let tr = c.addr()?;
             let aid = c.u8()?;
@@ -1931,13 +1919,11 @@ fn dispatch_words(
             Ok(1)
         }
         SEL_GET_OB => {
-            storage.check_non_reentrant()?;
             let mut c = AbiCursor::new_exact(input, 96)?;
             out[0] = u256_be(&storage.get_ob(c.addr()?, c.addr()?, c.u8()?));
             Ok(1)
         }
         SEL_GET_FEE | SEL_GET_VAULT_RAW => {
-            storage.check_non_reentrant()?;
             let mut c = AbiCursor::new_exact(input, 32)?;
             let aid = c.u8()?;
             let v = if selector == SEL_GET_FEE {
@@ -1949,7 +1935,6 @@ fn dispatch_words(
             Ok(1)
         }
         SEL_GET_NONCE | SEL_GET_PARTIAL_FILL => {
-            storage.check_non_reentrant()?;
             let mut c = AbiCursor::new_exact(input, 64)?;
             let tr = c.addr()?;
             c.u256(&mut u0)?;
@@ -1962,7 +1947,6 @@ fn dispatch_words(
             Ok(1)
         }
         SEL_GET_ASSET_CFG => {
-            storage.check_non_reentrant()?;
             let mut c = AbiCursor::new_exact(input, 32)?;
             let aid = c.u8()?;
             if aid >= storage.read_header().3 {
@@ -2305,5 +2289,43 @@ mod tests {
             Err(reent_err)
         );
         vm.set_reentrant(false);
+    }
+
+    #[test]
+    fn test_v120_dust_collateral_deadlock_broken_and_cei() {
+        let vm = TestVM::new();
+        let admin = Address::from([0xAAu8; 20]);
+        let victim = Address::from([0xBBu8; 20]);
+        let wad = U256::from(1_000_000_000_000_000_000u128);
+        vm.set_sender(admin);
+        vm.set_block_timestamp(1000);
+        assert!(dispatch(initializeCall { initialAdmin: admin, benchmarkSeedingEnabled: true }.abi_encode()).is_ok());
+        assert!(dispatch(configureAssetCall { assetId: 0, token: Address::ZERO, decimals: 6, markPriceWad: wad, haircutBps: 0, imBps: 500, mmBps: 250 }.abi_encode()).is_ok());
+        assert!(dispatch(configureAssetCall { assetId: 1, token: Address::ZERO, decimals: 18, markPriceWad: U256::from(2000u64) * wad, haircutBps: 1000, imBps: 1000, mmBps: 500 }.abi_encode()).is_ok());
+        // Seed victim with -10 USDC debt and 500 wei (< MIN_INTENT_AMOUNT_WAD = 1e9) dust WETH collateral
+        assert!(dispatch(seedAccountBalanceCall { trader: victim, assetId: 0, balanceWad: -I256::try_from(U256::from(10u64) * wad).unwrap() }.abi_encode()).is_ok());
+        assert!(dispatch(seedAccountBalanceCall { trader: victim, assetId: 1, balanceWad: I256::try_from(U256::from(500u64)).unwrap() }.abi_encode()).is_ok());
+        // Admin has insufficient balance first: absorbBadDebt must fail with InsufficientWithdrawableBalance without zeroing fee vault
+        let insuff_err = alloy_primitives::keccak256(b"InsufficientWithdrawableBalance()")[..4].to_vec();
+        assert_eq!(
+            dispatch(absorbBadDebtCall { underwater: victim, debtAsset: 0 }.abi_encode()),
+            Err(insuff_err)
+        );
+        // Fund admin with 100 USDC and absorb bad debt: must succeed and sweep 500 wei dust WETH to fee_vault
+        assert!(dispatch(seedAccountBalanceCall { trader: admin, assetId: 0, balanceWad: I256::try_from(U256::from(100u64) * wad).unwrap() }.abi_encode()).is_ok());
+        let out = dispatch(absorbBadDebtCall { underwater: victim, debtAsset: 0 }.abi_encode()).unwrap();
+        assert_eq!(U256::from_be_slice(&out), U256::from(10u64) * wad);
+        // Query victim balances and fee vault directly via canonical selectors
+        let mut q0 = SEL_GET_BAL.to_be_bytes().to_vec();
+        q0.extend_from_slice(&word_addr(victim));
+        q0.extend_from_slice(&word_u8(0));
+        let mut q1 = SEL_GET_BAL.to_be_bytes().to_vec();
+        q1.extend_from_slice(&word_addr(victim));
+        q1.extend_from_slice(&word_u8(1));
+        let mut qf = SEL_GET_FEE.to_be_bytes().to_vec();
+        qf.extend_from_slice(&word_u8(1));
+        assert_eq!(I256::try_from_be_slice(&dispatch(q0).unwrap()).unwrap(), I256::ZERO);
+        assert_eq!(I256::try_from_be_slice(&dispatch(q1).unwrap()).unwrap(), I256::ZERO);
+        assert_eq!(U256::from_be_slice(&dispatch(qf).unwrap()), U256::from(500u64));
     }
 }

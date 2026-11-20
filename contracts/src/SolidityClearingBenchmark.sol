@@ -348,11 +348,13 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         uint16 mmBps
     ) external override checkUnlocked {
         _onlyAdmin();
-        if (decimals > 18 || markPriceWad == 0 || mmBps < 2 || mmBps > imBps || imBps > BPS_DENOM) {
+        if (assetId >= 16 || assetId > _assetCount || markPriceWad == 0 || decimals > 18) {
             _rev(InvalidAssetConfig.selector);
         }
         if (haircutBps >= BPS_DENOM) _rev(InvalidHaircut.selector);
-        if (assetId > _assetCount || assetId >= 16) _rev(InvalidAssetConfig.selector);
+        if (mmBps < 2 || mmBps > imBps || imBps > BPS_DENOM) {
+            _rev(InvalidAssetConfig.selector);
+        }
         if (token != address(0) && token.code.length == 0) _rev(InvalidAssetConfig.selector);
 
         uint64 ts = _requireValidTimestamp();
@@ -480,7 +482,8 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         uint256 quantumWad = _unitScale(cfg.decimals);
         int256 cur = _balances[msg.sender][assetId];
         if (cur >= 0) _rev(InvalidIntent.selector);
-        if (cur == type(int256).min || uint256(-cur) >= quantumWad) _rev(InvalidIntent.selector);
+        if (cur == type(int256).min) _rev(MathOverflow.selector);
+        if (uint256(-cur) >= quantumWad) _rev(InvalidIntent.selector);
 
         uint256 received = _safeTransferFromReceived(cfg.token, msg.sender, 1);
         uint256 addWad = FullMath512.mulDivFloor(received, quantumWad, 1);
@@ -491,34 +494,43 @@ contract SolidityClearingBenchmark is ISettlementEngine {
     }
 
     function absorbBadDebt(address underwater, uint8 debtAsset) external override checkUnlocked returns (uint256 absorbedWad) {
+        unchecked {
         uint8 nAssets = _assetCount;
         if (underwater == address(0) || debtAsset >= nAssets) _rev(InvalidAssetConfig.selector);
-        for (uint8 a = 0; a < nAssets; a++) {
-            if (_balances[underwater][a] > 0) _rev(InvalidIntent.selector);
-        }
-        int256 dBal = _balances[underwater][debtAsset];
+        mapping(uint8 => int256) storage uBal = _balances[underwater];
+        int256 dBal = uBal[debtAsset];
         if (dBal >= 0) _rev(InvalidIntent.selector);
         if (dBal == type(int256).min) _rev(MathOverflow.selector);
+        for (uint8 a = 0; a < nAssets; ++a) {
+            if (uBal[a] >= int256(MIN_INTENT_AMOUNT_WAD)) _rev(InvalidIntent.selector);
+        }
         absorbedWad = uint256(-dBal);
 
         uint256 feeBal = _feeVault[debtAsset];
         if (feeBal >= absorbedWad) {
             _feeVault[debtAsset] = feeBal - absorbedWad;
         } else if (msg.sender == _admin) {
-            uint256 rem = absorbedWad - feeBal;
-            _feeVault[debtAsset] = 0;
-            int256 remI = FullMath512.toInt256(rem);
+            int256 remI = FullMath512.toInt256(absorbedWad - feeBal);
             int256 curAdminBal = _balances[_admin][debtAsset];
             if (curAdminBal < remI) _rev(InsufficientWithdrawableBalance.selector);
             int256 nextAdminBal = curAdminBal - remI;
             _checkPostWithdrawalMargin(_admin, nAssets, debtAsset, nextAdminBal);
+            _feeVault[debtAsset] = 0;
             _balances[_admin][debtAsset] = nextAdminBal;
         } else {
             _rev(InsufficientWithdrawableBalance.selector);
         }
 
-        _balances[underwater][debtAsset] = 0;
+        for (uint8 a = 0; a < nAssets; ++a) {
+            int256 b = uBal[a];
+            if (b > 0) {
+                _feeVault[a] = FullMath512.checkedAddU256(_feeVault[a], uint256(b));
+                uBal[a] = 0;
+            }
+        }
+        uBal[debtAsset] = 0;
         emit BadDebtAbsorbed(msg.sender, underwater, debtAsset, absorbedWad);
+        }
     }
 
     function sweepDustToFeeVault(uint8 assetId) external override checkUnlocked returns (uint256 dustWad) {
@@ -666,7 +678,8 @@ contract SolidityClearingBenchmark is ISettlementEngine {
             repaidDebtWad = cappedRepay;
         }
         bool fullDebtClearance = (repaidDebtWad == absDebt);
-        if (seizedCollateralWad == 0 || repaidDebtWad == 0 || (!fullDebtClearance && repaidDebtWad < MIN_INTENT_AMOUNT_WAD)) _rev(InvalidIntent.selector);
+        bool fullCollClearance = (seizedCollateralWad == availColl);
+        if (seizedCollateralWad == 0 || repaidDebtWad == 0 || (!(fullDebtClearance || fullCollClearance) && repaidDebtWad < MIN_INTENT_AMOUNT_WAD)) _rev(InvalidIntent.selector);
 
         int256 repayI = FullMath512.toInt256(repaidDebtWad);
         int256 seizeI = FullMath512.toInt256(seizedCollateralWad);
@@ -1107,7 +1120,7 @@ contract SolidityClearingBenchmark is ISettlementEngine {
         unchecked {
         workIts = new WorkIntent[](intents.length);
         if (intents.length == 0) return workIts;
-        uint8[] memory traderPairSides = new uint8[](nAcc * 256);
+        uint256[] memory traderPairSides = new uint256[](nAcc * 2);
         for (uint256 i = 0; i < intents.length; i++) {
             SignedTradeIntent calldata it = intents[i];
             if (it.side > 1 || it.authMode > 1) _rev(InvalidIntent.selector);
@@ -1118,10 +1131,12 @@ contract SolidityClearingBenchmark is ISettlementEngine {
                 _rev(InvalidIntent.selector);
             }
 
-            uint8 sideMask = uint8(1 << it.side);
-            uint256 mKey = (uint256(it.trader) << 8) | (uint256(it.baseAsset) << 4) | it.quoteAsset;
-            if ((traderPairSides[mKey] & (uint8(3) ^ sideMask)) != 0) _rev(InvalidIntent.selector);
-            traderPairSides[mKey] |= sideMask;
+            uint256 pairIdx = (uint256(it.baseAsset) << 4) | it.quoteAsset;
+            uint256 wordIdx = (uint256(it.trader) << 1) | (pairIdx >> 7);
+            uint256 shift = (pairIdx & 127) << 1;
+            uint256 oppBit = uint256(1) << (shift + (1 - it.side));
+            if ((traderPairSides[wordIdx] & oppBit) != 0) _rev(InvalidIntent.selector);
+            traderPairSides[wordIdx] |= uint256(1) << (shift + it.side);
 
             if (epoch > it.maxEpoch) _rev(ExpiredIntent.selector);
 

@@ -1,5 +1,5 @@
 /**
- * Seam S3 Workbench & Keyless JSON-RPC Dual-Chain Test Suite (v1.0.0)
+ * Seam S3 Workbench & Keyless JSON-RPC Dual-Chain Test Suite (v1.2.0)
  */
 import assert from "node:assert/strict";
 import http from "node:http";
@@ -137,7 +137,7 @@ main().catch((err) => {
   process.exit(1);
 });
 
-// v1.1.0 regressions: zero-node_modules bundle, normalizeBigIntId validation, fullDebtClearance dust, oracleBandGuard counter-intent
+// v1.2.0 regressions: zero-node_modules bundle, normalizeBigIntId validation, fullDebtClearance dust, oracleBandGuard counter-intent
 assert.throws(() => normalizeBigIntId(""), /Invalid uint64/);
 assert.throws(() => normalizeBigIntId("-1"), /Invalid uint64/);
 assert.equal(normalizeBigIntId("421614"), 421614n);
@@ -149,8 +149,19 @@ const dustLiq = previewUnderwaterLiquidation({
   repayAmountWad: 500_000_000n,
 });
 assert.equal(dustLiq.ok, false, "healthy account cannot be liquidated");
-const obgPayload = buildLiveScenarioPayloads("oracleBandGuard", { chainId: 421614 });
-assert.equal(obgPayload.intents.length, 2, "oracleBandGuard must include crossing BUY+SELL intents");
-assert.equal(obgPayload.intents[0].side, 0);
-assert.equal(obgPayload.intents[1].side, 1);
-console.log("[seam-s3] v1.1.0 web regressions passed (zero node_modules)");
+const obgPayloadV12 = buildLiveScenarioPayloads("oracleBandGuard", { chainId: 421614 });
+assert.equal(obgPayloadV12.intents.length, 2, "oracleBandGuard must include crossing BUY+SELL intents");
+assert.equal(obgPayloadV12.intents[0].side, 0);
+assert.equal(obgPayloadV12.intents[1].side, 1);
+console.log("[seam-s3] v1.2.0 web regressions passed (zero node_modules)");
+
+// v1.2.0 post-batch vs rollback parity & single-caller keyless guard check
+assert.notEqual(
+  PRESET_SCENARIOS.institutionalMesh.desks[0].balances[0],
+  PRESET_SCENARIOS.oracleBandGuard.desks[0].balances[0],
+  "Settled Scenario 1 balance must differ from Scenario 2 atomic rollback balance"
+);
+{
+  const pGuard = buildLiveScenarioPayloads("oracleBandGuard", { chainId: 421614 });
+  assert.equal(pGuard.intents.every((i) => i.trader === 0 && i.authMode === 0), true, "keyless oracleBandGuard must only use caller trader=0");
+}

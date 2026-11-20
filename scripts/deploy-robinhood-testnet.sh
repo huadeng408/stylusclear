@@ -1,127 +1,174 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# StylusClear v1.1.0 Atomic Deployment Script (Robinhood Chain Testnet — Chain ID 46630)
+# StylusClear v1.2.0 Idempotent Atomic Deployment Script (robinhood-testnet)
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-if [[ -f "$HOME/.cache/stylusclear_entity_sandbox/activate_env.sh" ]]; then
-  # shellcheck disable=SC1091
-  source "$HOME/.cache/stylusclear_entity_sandbox/activate_env.sh"
-fi
-
-RPC_URL="${RPC_URL:-${ROBINHOOD_RPC_URL:-https://rpc.testnet.chain.robinhood.com}}"
+RPC_URL="${ROBINHOOD_RPC_URL:-${SEPOLIA_RPC_URL:-https://rpc.testnet.chain.robinhood.com}}"
 CHAIN_ID_EXPECTED="${CHAIN_ID_EXPECTED:-46630}"
-WASM_FILE="$ROOT_DIR/artifacts/clearing_stylus.wasm"
-INITCODE_HEX_FILE="$ROOT_DIR/artifacts/clearing_stylus.initcode.hex"
-DEPLOY_JSON="$ROOT_DIR/deployments/${DEPLOY_OUT_NAME:-robinhood-testnet.json}"
-WEB_DEPLOY_JSON="$ROOT_DIR/web/deployments/${DEPLOY_OUT_NAME:-robinhood-testnet.json}"
+DEPLOY_OUT_NAME="${DEPLOY_OUT_NAME:-robinhood-testnet.json}"
 REQUIRE_STYLUS="${REQUIRE_STYLUS:-1}"
 USE_ATOMIC_FACTORY="${USE_ATOMIC_FACTORY:-1}"
 
 if [[ -z "${PRIVATE_KEY:-}" ]]; then
-  echo "[deploy] ERROR: Set PRIVATE_KEY environment variable before broadcasting." >&2
+  echo "[deploy] ERROR: PRIVATE_KEY env var is required." >&2
   exit 1
 fi
 export ETH_PRIVATE_KEY="$PRIVATE_KEY"
+command -v cast >/dev/null 2>&1 || { echo "[deploy] ERROR: Foundry 'cast' required on PATH." >&2; exit 1; }
 
-if [[ ! -f "$WASM_FILE" ]]; then
-  echo "[deploy] Building reproducible WASM 1.0 MVP artifact..."
-  cargo build --locked --release --target wasm32-unknown-unknown -p clearing-stylus
-  python3 scripts/optimize-wasm-mvp.py target/wasm32-unknown-unknown/release/clearing_stylus.wasm "$WASM_FILE"
-fi
-
-ACTUAL_CHAIN_ID="$(cast chain-id --rpc-url "$RPC_URL")"
-if [[ "$ACTUAL_CHAIN_ID" != "$CHAIN_ID_EXPECTED" ]]; then
-  echo "[deploy] FATAL: RPC returned chainId=$ACTUAL_CHAIN_ID (expected $CHAIN_ID_EXPECTED). Aborting to prevent wrong-chain broadcast." >&2
+ACTUAL_CHAIN="$(cast chain-id --rpc-url "$RPC_URL")"
+if [[ "$ACTUAL_CHAIN" != "$CHAIN_ID_EXPECTED" ]]; then
+  echo "[deploy] ERROR: Expected chain ID $CHAIN_ID_EXPECTED, got $ACTUAL_CHAIN" >&2
   exit 1
 fi
 
 DEPLOYER_ADDR="$(cast wallet address)"
-echo "[deploy] Broadcasting from $DEPLOYER_ADDR to $RPC_URL (chainId=$ACTUAL_CHAIN_ID)..."
+OUT_JSON="$ROOT_DIR/deployments/$DEPLOY_OUT_NAME"
+WEB_JSON="$ROOT_DIR/web/deployments/$DEPLOY_OUT_NAME"
+COMPILED_JSON="$ROOT_DIR/artifacts/contracts-compiled.json"
+INITCODE_HEX_FILE="$ROOT_DIR/artifacts/clearing_stylus.initcode.hex"
 
-deploy_contract() {
-  local contract_spec="$1"
-  shift
-  local solc_opt=()
-  if command -v solc >/dev/null 2>&1; then solc_opt=(--use "$(command -v solc)"); fi
-  forge create "$contract_spec" "${solc_opt[@]}" --rpc-url "$RPC_URL" --broadcast "$@" --json | python3 -c "import sys,json; print(json.load(sys.stdin)['deployedTo'])"
+echo "[deploy] Network=robinhood-testnet (chainId=$ACTUAL_CHAIN) deployer=$DEPLOYER_ADDR"
+
+read_checkpoint() {
+  python3 - "$OUT_JSON" "$1" <<'PYEOF'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+if not p.exists():
+    print("")
+    raise SystemExit(0)
+d = json.loads(p.read_text(encoding="utf-8"))
+cur = d
+for part in sys.argv[2].split("."):
+    cur = cur.get(part) if isinstance(cur, dict) else None
+print(cur if isinstance(cur, str) else "")
+PYEOF
 }
 
-TOK0="$(deploy_contract contracts/src/MockERC20.sol:MockERC20 --constructor-args "Global Dollar Mock" "USDG" 6)"
-TOK1="$(deploy_contract contracts/src/MockERC20.sol:MockERC20 --constructor-args "Wrapped Ether Mock" "WETH" 18)"
-TOK2="$(deploy_contract contracts/src/MockERC20.sol:MockERC20 --constructor-args "Arbitrum Mock" "ARB" 18)"
-TOK3="$(deploy_contract contracts/src/MockERC20.sol:MockERC20 --constructor-args "Tokenized NVDAx Mock" "NVDAx" 18)"
-FACTORY_ADDR="$(deploy_contract contracts/src/StylusAtomicFactory.sol:StylusAtomicFactory)"
-SOL_ENGINE="$(deploy_contract contracts/src/SolidityClearingBenchmark.sol:SolidityClearingBenchmark --constructor-args "$DEPLOYER_ADDR" false)"
+write_checkpoint() {
+  python3 - "$OUT_JSON" "$WEB_JSON" "$1" "$2" "$ACTUAL_CHAIN" "$RPC_URL" <<'PYEOF'
+import json, sys
+from pathlib import Path
+p, wp, key_path, val, cid, rpc = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4], int(sys.argv[5]), sys.argv[6]
+d = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"schemaVersion": "1.2.0", "chainId": cid, "rpcUrl": rpc, "assets": {}}
+d["schemaVersion"] = "1.2.0"
+d["chainId"] = cid
+d["rpcUrl"] = rpc
+parts = key_path.split(".")
+cur = d
+for part in parts[:-1]:
+    cur = cur.setdefault(part, {})
+cur[parts[-1]] = val
+text = json.dumps(d, indent=2) + "\n"
+p.parent.mkdir(parents=True, exist_ok=True)
+p.write_text(text, encoding="utf-8")
+wp.parent.mkdir(parents=True, exist_ok=True)
+wp.write_text(text, encoding="utf-8")
+PYEOF
+}
 
-cast send "$SOL_ENGINE" "setRiskWindows(uint64,uint16,bool)" 3600 2000 true --rpc-url "$RPC_URL" >/dev/null
-cast send "$SOL_ENGINE" "setApprovedSolver(address,bool)" "$DEPLOYER_ADDR" true --rpc-url "$RPC_URL" >/dev/null
-cast send "$SOL_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 0 "$TOK0" 6 1000000000000000000 0 500 250 --rpc-url "$RPC_URL" >/dev/null
-cast send "$SOL_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 1 "$TOK1" 18 2850000000000000000000 500 1000 500 --rpc-url "$RPC_URL" >/dev/null
-cast send "$SOL_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 2 "$TOK2" 18 1000000000000000000 1000 1200 600 --rpc-url "$RPC_URL" >/dev/null
-cast send "$SOL_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 3 "$TOK3" 18 140000000000000000000 1000 1200 600 --rpc-url "$RPC_URL" >/dev/null
+is_deployed() {
+  local addr="$1"
+  [[ -n "$addr" && "$addr" != "null" && "$addr" != "0x0000000000000000000000000000000000000000" ]] || return 1
+  local code
+  code="$(cast code "$addr" --rpc-url "$RPC_URL" 2>/dev/null || echo "0x")"
+  [[ "$code" != "0x" && ${#code} -gt 4 ]]
+}
 
-STYLUS_ENGINE=""
-if [[ "$USE_ATOMIC_FACTORY" == "1" && -f "$INITCODE_HEX_FILE" ]]; then
-  echo "[deploy] Atomically deploying & initializing Stylus engine via StylusAtomicFactory ($FACTORY_ADDR)..."
-  INITCODE_HEX="$(tr -d '\r\n' < "$INITCODE_HEX_FILE")"
-  USER_SALT="$(cast keccak "stylusclear-v1.1.0-$(date +%s)")"
-  FAC_TX_JSON="$(cast send "$FACTORY_ADDR" "deployAndInitialize(bytes,bytes32,address,bool)" "$INITCODE_HEX" "$USER_SALT" "$DEPLOYER_ADDR" false --value 0.002ether --rpc-url "$RPC_URL" --json)"
-  STYLUS_ENGINE="$(printf '%s' "$FAC_TX_JSON" | python3 -c "import sys,json; logs=json.load(sys.stdin).get('logs',[]); print('0x'+logs[-1]['topics'][1][-40:] if logs and len(logs[-1].get('topics',[]))>1 else '')")"
-elif command -v cargo-stylus >/dev/null 2>&1 || cargo stylus --version >/dev/null 2>&1; then
-  echo "[deploy] Deploying pre-optimized WASM ($WASM_FILE) via cargo stylus --private-key-path..."
-  KEY_TMP="$(mktemp)"
-  chmod 600 "$KEY_TMP"
-  trap 'rm -f "$KEY_TMP"' EXIT
-  printf '%s' "$PRIVATE_KEY" > "$KEY_TMP"
-  STYLUS_OUT="$(cargo stylus deploy --endpoint "$RPC_URL" --private-key-path "$KEY_TMP" --wasm-file "$WASM_FILE" --no-verify 2>&1 | sed -r 's/\x1B\[[0-9;]*[mK]//g')"
-  rm -f "$KEY_TMP"
-  STYLUS_ENGINE="$(printf '%s\n' "$STYLUS_OUT" | grep -iE 'deployed code at address|contract address' | grep -Eo '0x[0-9a-fA-F]{40}' | head -n 1 || true)"
-  if [[ -n "$STYLUS_ENGINE" ]]; then
-    cast send "$STYLUS_ENGINE" "initialize(address,bool)" "$DEPLOYER_ADDR" false --rpc-url "$RPC_URL" >/dev/null
+deploy_from_compiled() {
+  local contract_name="$1"
+  local ctor_sig="$2"
+  shift 2
+  local bc
+  bc="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["bytecode"])' "$COMPILED_JSON" "$contract_name")"
+  local encoded_args=""
+  if [[ -n "$ctor_sig" ]]; then
+    encoded_args="$(cast abi-encode "$ctor_sig" "$@" | sed 's/^0x//')"
+  fi
+  local create_data="${bc}${encoded_args}"
+  local tx_out
+  tx_out="$(cast send --rpc-url "$RPC_URL" --json --create "$create_data")"
+  printf '%s' "$tx_out" | python3 -c "import json,sys; print(json.load(sys.stdin)['contractAddress'])"
+}
+
+ensure_contract() {
+  local ck_key="$1"
+  local contract_name="$2"
+  local ctor_sig="$3"
+  shift 3
+  local existing
+  existing="$(read_checkpoint "$ck_key")"
+  if is_deployed "$existing"; then
+    echo "[deploy] Reusing checkpointed $ck_key = $existing" >&2
+    printf '%s\n' "$existing"
+    return 0
+  fi
+  local deployed
+  deployed="$(deploy_from_compiled "$contract_name" "$ctor_sig" "$@")"
+  write_checkpoint "$ck_key" "$deployed"
+  echo "[deploy] Deployed $ck_key = $deployed" >&2
+  printf '%s\n' "$deployed"
+}
+
+TOK0="$(ensure_contract "assets.USDG" "MockERC20" "constructor(string,string,uint8)" "USDG" "USDG" 6)"
+TOK1="$(ensure_contract "assets.WETH" "MockERC20" "constructor(string,string,uint8)" "Wrapped Ether" "WETH" 18)"
+TOK2="$(ensure_contract "assets.ARB" "MockERC20" "constructor(string,string,uint8)" "Arbitrum" "ARB" 18)"
+TOK3="$(ensure_contract "assets.NVDAx" "MockERC20" "constructor(string,string,uint8)" "NVIDIA RWA" "NVDAx" 18)"
+SOL_ENGINE="$(ensure_contract "solidityBenchmarkAddress" "SolidityClearingBenchmark" "constructor(address,bool)" "$DEPLOYER_ADDR" false)"
+FACTORY_ADDR="$(ensure_contract "stylusAtomicFactoryAddress" "StylusAtomicFactory" "")"
+
+STYLUS_ENGINE="$(read_checkpoint "stylusEngineAddress")"
+if is_deployed "$STYLUS_ENGINE"; then
+  echo "[deploy] Reusing checkpointed stylusEngineAddress = $STYLUS_ENGINE"
+else
+  if [[ "$USE_ATOMIC_FACTORY" == "1" ]]; then
+    if [[ ! -f "$INITCODE_HEX_FILE" ]]; then
+      echo "[deploy] ERROR: Missing precompiled $INITCODE_HEX_FILE" >&2
+      exit 1
+    fi
+    INITCODE="$(tr -d '[:space:]' < "$INITCODE_HEX_FILE")"
+    SALT="0x$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+    TOPIC0="$(cast keccak 'EngineAtomicallyDeployed(address,address,bytes32,bool,bool)')"
+    echo "[deploy] Deploying + activating Stylus engine atomically via StylusAtomicFactory ($FACTORY_ADDR)..."
+    TX_JSON="$(cast send "$FACTORY_ADDR" "deployAndInitialize(bytes,bytes32,address,bool)" "$INITCODE" "$SALT" "$DEPLOYER_ADDR" false --value 0.002ether --rpc-url "$RPC_URL" --json)"
+    STYLUS_ENGINE="$(printf '%s' "$TX_JSON" | python3 - "$TOPIC0" <<'PYEOF'
+import json, sys
+topic0 = sys.argv[1].lower()
+d = json.load(sys.stdin)
+for log in d.get("logs", []):
+    topics = log.get("topics", [])
+    if topics and topics[0].lower() == topic0 and len(topics) >= 2:
+        print("0x" + topics[1][-40:])
+        raise SystemExit(0)
+raise SystemExit("EngineAtomicallyDeployed event not found in receipt logs")
+PYEOF
+)"
+    write_checkpoint "stylusEngineAddress" "$STYLUS_ENGINE"
+    echo "[deploy] Atomically deployed & initialized stylusEngineAddress = $STYLUS_ENGINE"
+  else
+    echo "[deploy] ERROR: USE_ATOMIC_FACTORY=0 is blocked on public testnets to prevent initialize() front-running." >&2
+    exit 1
   fi
 fi
 
-if [[ -z "$STYLUS_ENGINE" && "$REQUIRE_STYLUS" == "1" ]]; then
-  echo "[ERROR] Stylus engine deployment failed or cargo-stylus/initcode unavailable while REQUIRE_STYLUS=1" >&2
+if [[ "$REQUIRE_STYLUS" == "1" ]] && ! is_deployed "$STYLUS_ENGINE"; then
+  echo "[deploy] ERROR: REQUIRE_STYLUS=1 but stylusEngineAddress is not deployed." >&2
   exit 1
 fi
 
-if [[ -n "$STYLUS_ENGINE" ]]; then
-  cast send "$STYLUS_ENGINE" "setRiskWindows(uint64,uint16,bool)" 3600 2000 true --rpc-url "$RPC_URL" >/dev/null
-  cast send "$STYLUS_ENGINE" "setApprovedSolver(address,bool)" "$DEPLOYER_ADDR" true --rpc-url "$RPC_URL" >/dev/null
-  cast send "$STYLUS_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 0 "$TOK0" 6 1000000000000000000 0 500 250 --rpc-url "$RPC_URL" >/dev/null
-  cast send "$STYLUS_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 1 "$TOK1" 18 2850000000000000000000 500 1000 500 --rpc-url "$RPC_URL" >/dev/null
-  cast send "$STYLUS_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 2 "$TOK2" 18 1000000000000000000 1000 1200 600 --rpc-url "$RPC_URL" >/dev/null
-  cast send "$STYLUS_ENGINE" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 3 "$TOK3" 18 140000000000000000000 1000 1200 600 --rpc-url "$RPC_URL" >/dev/null
-fi
+for ENG in "$SOL_ENGINE" "$STYLUS_ENGINE"; do
+  is_deployed "$ENG" || continue
+  COUNT="$(cast call "$ENG" "assetCount()(uint8)" --rpc-url "$RPC_URL" 2>/dev/null || echo 0)"
+  if [[ "$COUNT" -lt 4 ]]; then
+    echo "[deploy] Configuring 4 institutional assets on $ENG..."
+    cast send "$ENG" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 0 "$TOK0" 6 1000000000000000000 0 500 250 --rpc-url "$RPC_URL" >/dev/null
+    cast send "$ENG" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 1 "$TOK1" 18 2850000000000000000000 1000 1000 500 --rpc-url "$RPC_URL" >/dev/null
+    cast send "$ENG" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 2 "$TOK2" 18 1100000000000000000 2000 1500 750 --rpc-url "$RPC_URL" >/dev/null
+    cast send "$ENG" "configureAsset(uint8,address,uint8,uint256,uint16,uint16,uint16)" 3 "$TOK3" 18 140000000000000000000 1500 1200 600 --rpc-url "$RPC_URL" >/dev/null
+  fi
+done
 
-python3 - "$DEPLOY_JSON" "$WEB_DEPLOY_JSON" "$FACTORY_ADDR" "$STYLUS_ENGINE" "$SOL_ENGINE" "$TOK0" "$TOK1" "$TOK2" "$TOK3" "$ACTUAL_CHAIN_ID" "$RPC_URL" <<'PYEOF'
-import json, sys
-from pathlib import Path
-
-for p_str in (sys.argv[1], sys.argv[2]):
-    p = Path(p_str)
-    if p.exists():
-        d = json.loads(p.read_text(encoding="utf-8"))
-    else:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        d = {
-            "schemaVersion": "1.1.0",
-            "chainId": int(sys.argv[10]),
-            "rpcUrl": sys.argv[11],
-            "assets": {"USDC": None, "WETH": None, "ARB": None, "NVDAx": None},
-            "verifiedTxHashes": [],
-        }
-    d["schemaVersion"] = "1.1.0"
-    d["atomicFactoryContract"] = sys.argv[3]
-    d["stylusEngineAddress"] = sys.argv[4] or d.get("stylusEngineAddress")
-    d["solidityBenchmarkAddress"] = sys.argv[5]
-    keys = list(d["assets"].keys())
-    for idx, k in enumerate(keys[:4]):
-        d["assets"][k] = sys.argv[6 + idx]
-    p.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8", newline="\n")
-PYEOF
-
-echo "[deploy] OK solidity=$SOL_ENGINE stylus=${STYLUS_ENGINE:-pending-stylus-cli} factory=$FACTORY_ADDR"
+echo "[deploy] DONE (robinhood-testnet): Solidity=$SOL_ENGINE | Stylus=$STYLUS_ENGINE"

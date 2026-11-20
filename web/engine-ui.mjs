@@ -1,5 +1,5 @@
 /**
- * StylusClear v1.0.0 Isomorphic Clearing, Liquidation & Mesh Engine for Web Workbench
+ * StylusClear v1.2.0 Isomorphic Clearing, Liquidation & Mesh Engine for Web Workbench
  * - Zero plaintext funded private keys (D-13): keyless eth_call + cryptographic random nonceWord
  * - O(V^2) 2-Origin BFS cycle netting + memoized 64-desk mesh (<5ms slider latency, D-14)
  * - Full 4-asset support (USDC/USDG, WETH, ARB, NVDAx) + 512-bit UCPBA IR + adaptive floor liquidation
@@ -109,7 +109,7 @@ export function previewUnderwaterLiquidation({
     return { ok: false, error: "InvalidIntent" };
   }
   const absDebt = -uBals[debtAsset];
-  if (repayReq < MIN_INTENT_AMOUNT_WAD && repayReq < absDebt) {
+  if (repayReq < MIN_INTENT_AMOUNT_WAD) {
     return { ok: false, error: "InvalidIntent" };
   }
   const availColl = uBals[collateralAsset];
@@ -298,10 +298,10 @@ export const PRESET_SCENARIOS = {
     expectedStatus: "SETTLED",
     expectedError: null,
     desks: [
-      { name: "Desk Alpha", shortLabel: "Alpha", address: "0x1111111111111111111111111111111111111111", balances: [25000n * WAD, 8n * WAD, 5000n * WAD, 40n * WAD] },
-      { name: "Desk Bravo", shortLabel: "Bravo", address: "0x2222222222222222222222222222222222222222", balances: [22000n * WAD, 10n * WAD, 4000n * WAD, 25n * WAD] },
-      { name: "Desk Charlie", shortLabel: "Charlie", address: "0x3333333333333333333333333333333333333333", balances: [19000n * WAD, 6n * WAD, 8000n * WAD, 30n * WAD] },
-      { name: "Desk Delta", shortLabel: "Delta", address: "0x4444444444444444444444444444444444444444", balances: [31000n * WAD, 12n * WAD, 6000n * WAD, 50n * WAD] },
+      { name: "Desk Alpha", shortLabel: "Alpha", address: "0x1111111111111111111111111111111111111111", preBalances: [25000n * WAD, 8n * WAD, 5000n * WAD, 40n * WAD], balances: [20350n * WAD, 10n * WAD, 5000n * WAD, 40n * WAD] },
+      { name: "Desk Bravo", shortLabel: "Bravo", address: "0x2222222222222222222222222222222222222222", preBalances: [22000n * WAD, 10n * WAD, 4000n * WAD, 25n * WAD], balances: [26650n * WAD, 8n * WAD, 4000n * WAD, 25n * WAD] },
+      { name: "Desk Charlie", shortLabel: "Charlie", address: "0x3333333333333333333333333333333333333333", preBalances: [19000n * WAD, 6n * WAD, 8000n * WAD, 30n * WAD], balances: [19000n * WAD, 6n * WAD, 8000n * WAD, 30n * WAD] },
+      { name: "Desk Delta", shortLabel: "Delta", address: "0x4444444444444444444444444444444444444444", preBalances: [31000n * WAD, 12n * WAD, 6000n * WAD, 50n * WAD], balances: [31000n * WAD, 12n * WAD, 6000n * WAD, 50n * WAD] },
     ],
     grossObligationUsd: "13,200.00",
     netResidualUsd: "1,050.00",
@@ -346,10 +346,10 @@ export const PRESET_SCENARIOS = {
     expectedStatus: "SETTLED",
     expectedError: null,
     desks: [
-      { name: "Desk Alpha", shortLabel: "Alpha", address: "0x1111111111111111111111111111111111111111", balances: [40000n * WAD, 4n * WAD, 2000n * WAD, 120n * WAD] },
-      { name: "Desk Bravo", shortLabel: "Bravo", address: "0x2222222222222222222222222222222222222222", balances: [38000n * WAD, 5n * WAD, 3000n * WAD, 95n * WAD] },
-      { name: "Desk Charlie", shortLabel: "Charlie", address: "0x3333333333333333333333333333333333333333", balances: [29000n * WAD, 3n * WAD, 5000n * WAD, 150n * WAD] },
-      { name: "Desk Delta", shortLabel: "Delta", address: "0x4444444444444444444444444444444444444444", balances: [44000n * WAD, 6n * WAD, 4500n * WAD, 110n * WAD] },
+      { name: "Desk Alpha", shortLabel: "Alpha", address: "0x1111111111111111111111111111111111111111", preBalances: [40000n * WAD, 4n * WAD, 2000n * WAD, 120n * WAD], balances: [39300n * WAD, 4n * WAD, 2000n * WAD, 135n * WAD] },
+      { name: "Desk Bravo", shortLabel: "Bravo", address: "0x2222222222222222222222222222222222222222", preBalances: [38000n * WAD, 5n * WAD, 3000n * WAD, 95n * WAD], balances: [38700n * WAD, 5n * WAD, 3000n * WAD, 80n * WAD] },
+      { name: "Desk Charlie", shortLabel: "Charlie", address: "0x3333333333333333333333333333333333333333", preBalances: [29000n * WAD, 3n * WAD, 5000n * WAD, 150n * WAD], balances: [29000n * WAD, 3n * WAD, 5000n * WAD, 150n * WAD] },
+      { name: "Desk Delta", shortLabel: "Delta", address: "0x4444444444444444444444444444444444444444", preBalances: [44000n * WAD, 6n * WAD, 4500n * WAD, 110n * WAD], balances: [44000n * WAD, 6n * WAD, 4500n * WAD, 110n * WAD] },
     ],
     grossObligationUsd: "24,000.00",
     netResidualUsd: "1,400.00",
@@ -372,6 +372,8 @@ export function buildLiveScenarioPayloads(scenarioId, deploymentConfig) {
   const maxEpoch = 1_000_000_000n;
 
   if (scenarioId === "oracleBandGuard") {
+    // Keyless single-caller guard probe: trader 0 submits opposing wash-trade / out-of-band intents under authMode=0
+    // so both Stylus and Solidity deterministically revert InvalidIntent without embedding any private key.
     return {
       chainId,
       callerAddress: demoA,
@@ -379,7 +381,7 @@ export function buildLiveScenarioPayloads(scenarioId, deploymentConfig) {
       obligations: [],
       intents: [
         { trader: 0, baseAsset: 1, quoteAsset: 0, side: 0, authMode: 0, v: 0, maxEpoch, amountWad: 1n * WAD, limitPriceWad: 3900n * WAD, nonce: nonceBase, r: ZERO_B32, s: ZERO_B32 },
-        { trader: 1, baseAsset: 1, quoteAsset: 0, side: 1, authMode: 0, v: 0, maxEpoch, amountWad: 1n * WAD, limitPriceWad: 3600n * WAD, nonce: nonceBase + 1n, r: ZERO_B32, s: ZERO_B32 },
+        { trader: 0, baseAsset: 1, quoteAsset: 0, side: 1, authMode: 0, v: 0, maxEpoch, amountWad: 1n * WAD, limitPriceWad: 3600n * WAD, nonce: nonceBase + 1n, r: ZERO_B32, s: ZERO_B32 },
       ],
     };
   }

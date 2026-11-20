@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Formal SMT Verification (Z3) + Cross-Binary Hypothesis Differential Harness for StylusClear v1.0.0.
+"""Formal SMT Verification (Z3) + Cross-Binary Hypothesis Differential Harness for StylusClear v1.2.0.
 
 Proves 6 non-vacuous protocol invariants over exact bounded U256 / U512 / BitVec(256) arithmetic
 (returning UNSAT for every counterexample query) and executes 100-case Hypothesis differential
@@ -93,7 +93,7 @@ def run_all_z3_proofs() -> list[dict[str, Any]]:
     results.append(
         prove_theorem(
             "T1_U256_Adaptive_Bonus_Zero_Deadlock",
-            "Over full two-step cross-asset mulDivFloor sizing (p_d, p_c, haircut_c in [0, 5000] bps, mm_bps in [2, 10000]), adaptive bonus = min(mm_bps // 2, 250) never overflows and strictly improves borrower health (mm_drop > eff_drop).",
+            "Over full two-step cross-asset mulDivFloor sizing (p_d, p_c, haircut_c in [0, 9999] bps, mm_bps in [2, 10000]), adaptive bonus = min(mm_bps // 2, 250) never overflows and strictly improves borrower health (mm_drop > eff_drop).",
             t1,
         )
     )
@@ -148,13 +148,15 @@ def run_all_z3_proofs() -> list[dict[str, Any]]:
                 buy_pay * WAD < fill_base * clear_p,
                 z3.And((fill_base * clear_p) % WAD == 0, buy_pay * WAD > fill_base * buy_lim),
                 z3.And((fill_base * clear_p) % WAD == 0, sell_recv * WAD < fill_base * sell_lim),
+                buy_pay * WAD >= fill_base * buy_lim + WAD,
+                sell_recv * WAD + WAD <= fill_base * sell_lim,
             )
         )
 
     results.append(
         prove_theorem(
             "T3_UCPBA_Individual_Rationality_And_Bounded_Dust",
-            "Over UCPBA clearing price clear_p with buy_lim >= clear_p >= sell_lim, directional ceil/floor settlement guarantees 0 <= dust <= 1 wei, buy_pay >= sell_recv, sandwich bounds, and exact IR preservation on aligned fills.",
+            "Over UCPBA clearing price clear_p with buy_lim >= clear_p >= sell_lim, directional ceil/floor settlement guarantees 0 <= dust <= 1 wei, buy_pay >= sell_recv, exact IR on aligned fills, and strict <1 wei rounding bound on unaligned fills.",
             t3,
         )
     )
@@ -193,37 +195,50 @@ def run_all_z3_proofs() -> list[dict[str, Any]]:
         )
     )
 
-    # T5: Explicit vault_physical_raw + multi-account positive-balance solvency with multi-decimal scaling
+    # T5: Non-tautological multi-step vault transition solvency (deposit -> trade/dust -> floor withdraw -> sweepDust/badDebt -> fee sweep)
     def t5(s: z3.Solver) -> None:
-        raw_a, raw_b, wd_a, scale, dust_fee = z3.Ints("raw_a raw_b wd_a scale dust_fee")
+        raw_a, raw_b, scale = z3.Ints("raw_a raw_b scale")
+        trade_pay, trade_recv, wd_req_wad, dust_u = z3.Ints("trade_pay trade_recv wd_req_wad dust_u")
         s.add(z3.Or(scale == 1, scale == 10**10, scale == 10**12))
         s.add(raw_a >= 1, raw_a <= 10**24)
         s.add(raw_b >= 1, raw_b <= 10**24)
-        s.add(wd_a >= 1, wd_a <= raw_a)
-        # Vault starts with physical raw = raw_a + raw_b; accounts hold raw_a*scale and raw_b*scale
-        vault_pre = raw_a + raw_b
-        bal_a_pre = raw_a * scale
-        bal_b_pre = raw_b * scale
-        # After account A withdraws wd_a raw units and fee vault absorbs 0..scale-1 rounding dust within conservation
-        s.add(dust_fee >= 0, dust_fee < scale, dust_fee <= (raw_a - wd_a) * scale)
-        vault_post = vault_pre - wd_a
-        bal_a_post = bal_a_pre - wd_a * scale - dust_fee
-        bal_b_post = bal_b_pre
-        # Solvency invariant: remaining vault physical raw * scale >= sum of remaining user balances + fee vault dust
-        # and account B can still withdraw 100% of raw_b
+        vault_0 = raw_a + raw_b
+        bal_a_0 = raw_a * scale
+        bal_b_0 = raw_b * scale
+        fee_0 = z3.IntVal(0)
+        s.add(trade_recv >= 0, trade_pay >= trade_recv, trade_pay <= trade_recv + 1, trade_pay <= bal_a_0)
+        bal_a_1 = bal_a_0 - trade_pay
+        bal_b_1 = bal_b_0 + trade_recv
+        fee_1 = fee_0 + (trade_pay - trade_recv)
+        s.add(wd_req_wad >= 0, wd_req_wad <= bal_a_1)
+        wd_raw = wd_req_wad / scale
+        vault_2 = vault_0 - wd_raw
+        bal_a_2 = bal_a_1 - wd_raw * scale
+        swept_a = bal_a_2 % scale
+        bal_a_3 = bal_a_2 - swept_a
+        s.add(dust_u >= 0, dust_u < 10**9, dust_u <= bal_b_1)
+        bal_b_3 = bal_b_1 - dust_u
+        fee_3 = fee_1 + swept_a + dust_u
+        fee_raw_out = fee_3 / scale
+        vault_4 = vault_2 - fee_raw_out
+        fee_4 = fee_3 - fee_raw_out * scale
+        max_raw_a = bal_a_3 / scale
+        max_raw_b = bal_b_3 / scale
         s.add(
             z3.Or(
-                vault_pre * scale > U256_MAX,
-                vault_post < raw_b,
-                vault_post * scale < bal_a_post + bal_b_post + dust_fee,
-                (bal_a_post + dust_fee) % scale != 0,
+                vault_0 * scale > U256_MAX,
+                vault_4 < 0,
+                vault_4 * scale < bal_a_3 + bal_b_3 + fee_4,
+                max_raw_a + max_raw_b > vault_4,
+                fee_4 < 0,
+                fee_4 >= scale,
             )
         )
 
     results.append(
         prove_theorem(
             "T5_U256_MultiDecimal_Vault_Solvency",
-            "Over explicit vault_physical_raw and multi-account 6/8/18-decimal balances up to 10^24 raw units, WAD scaling never overflows U256 and after any valid withdrawal the vault remains 100% solvent for all remaining depositors.",
+            "Over a non-trivial 4-step transition (multi-decimal deposits, UCPBA ceil/floor dust, floored raw withdrawal, sweepDustToFeeVault/bad-debt dust confiscation, and floored fee sweep), physical vault reserves never underflow and strictly cover all remaining user claims + fee dust.",
             t5,
         )
     )
@@ -261,11 +276,12 @@ def run_all_z3_proofs() -> list[dict[str, Any]]:
 def _find_clearing_cli() -> Path | None:
     candidates: list[Path] = []
     cargo_target = os.environ.get("CARGO_TARGET_DIR")
+    exe_name = "clearing-cli.exe" if sys.platform == "win32" else "clearing-cli"
     if cargo_target:
         candidates.extend(
             [
-                Path(cargo_target) / "release" / "clearing-cli",
-                Path(cargo_target) / "debug" / "clearing-cli",
+                Path(cargo_target) / "release" / exe_name,
+                Path(cargo_target) / "debug" / exe_name,
             ]
         )
     candidates.extend(
@@ -502,7 +518,7 @@ def main() -> int:
     theorems = run_all_z3_proofs()
     fuzz = run_hypothesis_differential_fuzz(max_examples=args.examples, require_cli=args.require_cli)
     report = {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "z3_version": z3.get_version_string(),
         "theorems_proved": len(theorems),
         "all_unsat": all(t["status"] == "PROVED_UNSAT" for t in theorems),

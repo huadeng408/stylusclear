@@ -641,7 +641,8 @@ def execute_underwater_liquidation(
         actual_seize = raw_seize
 
     full_debt_clearance = actual_repay == abs_debt
-    if actual_seize == 0 or actual_repay == 0 or (not full_debt_clearance and actual_repay < MIN_INTENT_AMOUNT_WAD):
+    full_coll_clearance = actual_seize == avail_coll
+    if actual_seize == 0 or actual_repay == 0 or (not (full_debt_clearance or full_coll_clearance) and actual_repay < MIN_INTENT_AMOUNT_WAD):
         raise ClearingEngineError("InvalidIntent")
 
     if liquidator_balances[debt_asset] < actual_repay:
@@ -773,21 +774,24 @@ def execute_batch_payload(payload: dict) -> dict:
     if isinstance(nb_raw, dict):
         for k, v_word in nb_raw.items():
             parts = str(k).split(":")
-            if len(parts) == 2:
-                work_bitmaps[(int(parts[0]), int(parts[1]))] = int(v_word)
+            if len(parts) != 2:
+                raise ClearingEngineError("InvalidIntent")
+            work_bitmaps[(int(parts[0]), _check_u256(int(parts[1])))] = _check_u256(int(v_word))
     else:
         for entry in nb_raw:
-            work_bitmaps[(int(entry["account"]), int(entry["word_pos"]))] = int(entry["word"])
+            work_bitmaps[(int(entry["account"]), _check_u256(int(entry["word_pos"])))] = _check_u256(int(entry["word"]))
 
     work_confirmed: dict[tuple[int, int, int], int] = {}
     co_raw = payload.get("confirmed_obligations", {})
     if isinstance(co_raw, dict):
         for k, v_amt in co_raw.items():
-            u_s, v_s, a_s = str(k).split(":")
-            work_confirmed[(int(u_s), int(v_s), int(a_s))] = int(v_amt)
+            parts = str(k).split(":")
+            if len(parts) != 3:
+                raise ClearingEngineError("InvalidObligation")
+            work_confirmed[(int(parts[0]), int(parts[1]), int(parts[2]))] = _check_u256(int(v_amt))
     else:
         for entry in co_raw:
-            work_confirmed[(int(entry["debtor"]), int(entry["creditor"]), int(entry["asset_id"]))] = int(entry["amount_wad"])
+            work_confirmed[(int(entry["debtor"]), int(entry["creditor"]), int(entry["asset_id"]))] = _check_u256(int(entry["amount_wad"]))
 
     verified_edges: list[ObligationEdge] = []
     touched_mask = 0
@@ -818,6 +822,8 @@ def execute_batch_payload(payload: dict) -> dict:
             work_confirmed[key] = avail - amt
         elif mode == 1:
             max_ep = int(ob.get("max_epoch", U64_MAX))
+            if max_ep < 0 or max_ep > U64_MAX:
+                raise ClearingEngineError("InvalidObligation")
             if batch_epoch > max_ep:
                 raise ClearingEngineError("ExpiredIntent")
             _consume_nonce(work_bitmaps, u, int(ob["nonce"]))

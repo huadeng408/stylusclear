@@ -20,3 +20,5 @@ RUN cargo build --locked --release --target wasm32-unknown-unknown -p clearing-s
     && python3 scripts/optimize-wasm-mvp.py \
        target/wasm32-unknown-unknown/release/clearing_stylus.wasm \
        artifacts/clearing_stylus.wasm --json
+RUN useradd -m -u 10001 builder && chown -R builder:builder /workspace
+USER builder

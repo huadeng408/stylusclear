@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# StylusClear v1.0.0 Idempotent Live Settlement & 4-Asset Seeding Script
+# StylusClear v1.2.0 Idempotent Live Settlement & 4-Asset Seeding Script
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
@@ -14,9 +14,11 @@ TARGET_NET="${1:-sepolia}"
 if [[ "$TARGET_NET" == "robinhood" ]]; then
   DEPLOY_JSON="$ROOT_DIR/deployments/robinhood-testnet.json"
   RPC_URL="${ROBINHOOD_RPC_URL:-https://rpc.testnet.chain.robinhood.com}"
+  NET_KEY="robinhood_testnet"
 else
   DEPLOY_JSON="$ROOT_DIR/deployments/arbitrum-sepolia.json"
-  RPC_URL="${SEPOLIA_RPC_URL:-https://sepolia-rollup.arbitrum.io/rpc}"
+  RPC_URL="${ARB_SEPOLIA_RPC_URL:-${SEPOLIA_RPC_URL:-https://sepolia-rollup.arbitrum.io/rpc}}"
+  NET_KEY="arbitrum_sepolia"
 fi
 
 if [[ -z "${PRIVATE_KEY:-}" ]]; then
@@ -59,14 +61,16 @@ TX_HASH="$(printf '%s' "$TX_JSON" | python3 -c "import sys,json; print(json.load
 echo "[demo-live] Settled Solidity batch tx=$TX_HASH on $TARGET_NET"
 
 STYLUS_TX_HASH=""
+STYLUS_ADDR_CLEAN=""
 if [[ -n "${STYLUS_ADDR:-}" && "$STYLUS_ADDR" != "null" ]]; then
-  echo "[demo-live] Executing live settleBatch on Stylus engine: $STYLUS_ADDR"
-  cast send "$TOK0" "approve(address,uint256)" "$STYLUS_ADDR" 50000000000 --rpc-url "$RPC_URL" >/dev/null
-  cast send "$STYLUS_ADDR" "deposit(uint8,uint256)" 0 25000000000 --rpc-url "$RPC_URL" >/dev/null
-  cast send "$STYLUS_ADDR" "registerObligation(address,uint8,uint256)" "$COUNTERPARTY" 0 250000000000000000000 --rpc-url "$RPC_URL" >/dev/null
-  STYLUS_TX_HASH="$(cast send "$STYLUS_ADDR" "settleBatch(address[],(uint16,uint16,uint8,uint8,uint8,uint64,uint256,uint256,bytes32,bytes32)[],(uint16,uint8,uint8,uint8,uint8,uint8,uint64,uint256,uint256,uint256,bytes32,bytes32)[])" \
+  STYLUS_ADDR_CLEAN="$STYLUS_ADDR"
+  echo "[demo-live] Executing live settleBatch on Stylus engine: $STYLUS_ADDR_CLEAN"
+  cast send "$TOK0" "approve(address,uint256)" "$STYLUS_ADDR_CLEAN" 50000000000 --rpc-url "$RPC_URL" >/dev/null
+  cast send "$STYLUS_ADDR_CLEAN" "deposit(uint8,uint256)" 0 25000000000 --rpc-url "$RPC_URL" >/dev/null
+  cast send "$STYLUS_ADDR_CLEAN" "registerObligation(address,uint8,uint256)" "$COUNTERPARTY" 0 250000000000000000000 --rpc-url "$RPC_URL" >/dev/null
+  STYLUS_TX_HASH="$(cast send "$STYLUS_ADDR_CLEAN" "settleBatch(address[],(uint16,uint16,uint8,uint8,uint8,uint64,uint256,uint256,bytes32,bytes32)[],(uint16,uint8,uint8,uint8,uint8,uint8,uint64,uint256,uint256,uint256,bytes32,bytes32)[])" \
     "[$CALLER,$COUNTERPARTY]" "[(0,1,0,0,0,1000000,250000000000000000000,0,0x0000000000000000000000000000000000000000000000000000000000000000,0x0000000000000000000000000000000000000000000000000000000000000000)]" "[]" \
-    --rpc-url "$RPC_URL" --json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('transactionHash',''))" )"
+    --rpc-url "$RPC_URL" --json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('transactionHash',''))")"
   echo "[demo-live] Stylus settleBatch tx=${STYLUS_TX_HASH:-skipped}"
 fi
 
@@ -89,24 +93,35 @@ if p.exists():
         web_p.write_text(serialized, encoding="utf-8")
 PYEOF
 
-# Auto-backfill real on-chain gas telemetry into docs/benchmarks/measured-gas-artifacts.json
 if [[ -n "${STYLUS_TX_HASH:-}" || -n "${TX_HASH:-}" ]]; then
-  SOL_GAS="$(cast receipt "${TX_HASH:-}" --rpc-url "$RPC_URL" --json 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); print(int(r['gasUsed'],16))" 2>/dev/null || echo "")"
-  STY_GAS="$(cast receipt "${STYLUS_TX_HASH:-}" --rpc-url "$RPC_URL" --json 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); print(int(r['gasUsed'],16))" 2>/dev/null || echo "")"
-  python3 - "$SOL_ENGINE" "${STYLUS_ENGINE:-}" "${TX_HASH:-}" "${STYLUS_TX_HASH:-}" "$SOL_GAS" "$STY_GAS" <<'PYEOF'
+  SOL_GAS="$(cast receipt "${TX_HASH:-}" --rpc-url "$RPC_URL" --json 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); print(int(str(r['gasUsed']),0))" 2>/dev/null || echo "")"
+  STY_GAS="$(cast receipt "${STYLUS_TX_HASH:-}" --rpc-url "$RPC_URL" --json 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); print(int(str(r['gasUsed']),0))" 2>/dev/null || echo "")"
+  python3 - "$NET_KEY" "$SOL_ENGINE" "$STYLUS_ADDR_CLEAN" "${TX_HASH:-}" "${STYLUS_TX_HASH:-}" "$SOL_GAS" "$STY_GAS" <<'PYEOF'
 import json, sys
 from pathlib import Path
 p = Path("docs/benchmarks/measured-gas-artifacts.json")
 if p.exists():
     d = json.loads(p.read_text(encoding="utf-8"))
     ov = d.setdefault("onchain_verification", {})
-    if sys.argv[1]: ov["solidity_contract_address"] = sys.argv[1]
-    if sys.argv[2]: ov["stylus_contract_address"] = sys.argv[2]
-    if sys.argv[3]: ov["solidity_settle_tx_hash"] = sys.argv[3]
-    if sys.argv[4]: ov["stylus_settle_tx_hash"] = sys.argv[4]
-    if sys.argv[5]: ov["solidity_receipt_gas_used"] = int(sys.argv[5])
-    if sys.argv[6]: ov["stylus_receipt_gas_used"] = int(sys.argv[6])
+    net_key = sys.argv[1]
+    rec = ov.setdefault(net_key, {})
+    if sys.argv[2]: rec["solidity_contract_address"] = sys.argv[2]
+    if sys.argv[3]: rec["stylus_contract_address"] = sys.argv[3]
+    if sys.argv[4]: rec["solidity_settle_tx_hash"] = sys.argv[4]
+    if sys.argv[5]: rec["stylus_settle_tx_hash"] = sys.argv[5]
+    if sys.argv[6]: rec["solidity_receipt_gas_used"] = int(sys.argv[6])
+    if sys.argv[7]: rec["stylus_receipt_gas_used"] = int(sys.argv[7])
+    if net_key == "arbitrum_sepolia":
+        if sys.argv[5] or sys.argv[4]: ov["arbitrum_sepolia_tx"] = sys.argv[5] or sys.argv[4]
+        if sys.argv[7]: ov["arbitrum_sepolia_stylus_gas"] = int(sys.argv[7])
+        if sys.argv[6]: ov["arbitrum_sepolia_solidity_gas"] = int(sys.argv[6])
+    elif net_key == "robinhood_testnet":
+        if sys.argv[5] or sys.argv[4]: ov["robinhood_testnet_tx"] = sys.argv[5] or sys.argv[4]
+    if ov.get("arbitrum_sepolia_tx") and ov.get("robinhood_testnet_tx"):
+        d["calibration_status"] = "dual_chain_onchain_verified"
+    elif ov.get("arbitrum_sepolia_tx"):
+        d["calibration_status"] = "arbitrum_sepolia_onchain_verified"
     p.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8", newline="\n")
 PYEOF
-  python3 scripts/generate-benchmarks.py >/dev/null 2>&1 || true
+  python3 scripts/generate-benchmarks.py --render-from-json
 fi

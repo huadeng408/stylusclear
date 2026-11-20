@@ -5,6 +5,9 @@ on:
     branches: ["main"]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-24.04
@@ -13,7 +16,7 @@ jobs:
       - name: Install Binaryen & Python QA packages
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends binaryen shellcheck
-          python3 -m pip install --upgrade --break-system-packages pytest hypothesis z3-solver brotli eth-account eth-abi
+          python3 -m pip install --upgrade --break-system-packages pytest hypothesis z3-solver brotli eth-account eth-abi ruff mypy
       - uses: dtolnay/rust-toolchain@1.91.0
         with:
           targets: wasm32-unknown-unknown

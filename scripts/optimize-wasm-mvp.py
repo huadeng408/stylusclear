@@ -61,6 +61,8 @@ def optimize_to_mvp(src: Path, dst: Path) -> dict:
         "--duplicate-function-elimination",
         "--merge-similar-functions",
         "--merge-blocks",
+        "--code-folding",
+        "--coalesce-locals-learning",
         "--reorder-functions",
         "--reorder-locals",
         "--strip-debug",
@@ -74,15 +76,16 @@ def optimize_to_mvp(src: Path, dst: Path) -> dict:
 
     dis_name = "wasm-dis.exe" if sys.platform == "win32" else "wasm-dis"
     dis_tool = str(Path(wasm_opt).with_name(dis_name))
-    zero_float = True
+    zero_float = False
     if Path(dis_tool).exists():
         wat = subprocess.run([dis_tool, str(dst)], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
         if re.search(r"\b(f32|f64)\.", wat) or re.search(r"memory\.(copy|fill)|i(32|64)\.extend(8|16|32)_s", wat):
             raise RuntimeError("Post-MVP or floating-point opcode detected in optimized WASM")
+        zero_float = True
 
     raw = dst.read_bytes()
     b_len = brotli_q11_size(raw)
-    if b_len + 4 >= 24_576:
+    if b_len + 4 > 24_576:
         raise RuntimeError(f"Brotli-q11 + 4B Stylus header ({b_len + 4} B) exceeds 24,576 B legacy Stylus limit")
     return {
         "wasm_path": str(dst),
