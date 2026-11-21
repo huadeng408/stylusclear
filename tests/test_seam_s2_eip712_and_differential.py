@@ -168,3 +168,21 @@ def test_s2_v110_ref_sim_hardening_and_cli_strict_gate() -> None:
     # 4. Strict CLI enforcement when STYLUSCLEAR_REQUIRE_CLI=1
     if os.environ.get("STYLUSCLEAR_REQUIRE_CLI") == "1":
         assert _find_cli() is not None, "clearing-cli binary required when STYLUSCLEAR_REQUIRE_CLI=1"
+
+
+def test_s2_fips197_aes128_ctr_and_web3_keystore_v3() -> None:
+    from tools.ref_sim.crypto_eip712 import build_web3_keystore_v3, encrypt_aes128_ctr
+
+    # NIST FIPS-197 Appendix B / SP 800-38A single-block vector (CTR block 0 == ECB(IV))
+    key = bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c")
+    iv = bytes.fromhex("6bc1bee22e409f96e93d7e117393172a")
+    ct = encrypt_aes128_ctr(key, iv, b"\x00" * 16)
+    assert ct.hex() == "3ad77bb40d7a3660a89ecaf32466ef97"
+    # Multi-block CTR round-trip
+    msg = bytes(range(32))
+    enc = encrypt_aes128_ctr(key, iv, msg)
+    assert enc != msg
+    assert encrypt_aes128_ctr(key, iv, enc) == msg
+
+    ks = build_web3_keystore_v3(b"\x00" * 31 + b"\x01", "pw", b"\x11" * 32, b"\x22" * 16, "00000000-0000-4000-8000-000000000001")
+    assert ks["address"] == "7e5f4552091a69125d5dfcb7b8c2659029395bdf"

@@ -23,6 +23,7 @@ if [[ -f "$CACHE_DIR/activate_env.sh" ]]; then
   # shellcheck disable=SC1091
   source "$CACHE_DIR/activate_env.sh"
 fi
+export PATH="$HOME/.local/bin:$PATH"
 NODE_PATH="${NODE_PATH:-}"
 if [[ -d "$ROOT_DIR/web/node_modules" ]]; then NODE_PATH="$ROOT_DIR/web/node_modules${NODE_PATH:+:$NODE_PATH}"; fi
 export NODE_PATH="${NODE_PATH%:}"

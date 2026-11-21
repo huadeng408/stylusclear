@@ -8,6 +8,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
@@ -194,11 +195,35 @@ def verify_cross_doc_sync(existing: dict) -> None:
         assert f"{headroom_24k} B" in txt, f"SUBMISSION.md missing 24 KiB headroom {headroom_24k} B"
 
 
+def refresh_sha256sums(root: Path = ROOT) -> None:
+    sums_path = root / "SHA256SUMS.txt"
+    if not sums_path.exists():
+        return
+    updated_lines: list[str] = []
+    for raw_line in sums_path.read_text(encoding="utf-8").splitlines():
+        s = raw_line.strip()
+        if not s:
+            continue
+        parts = s.split(None, 1)
+        if len(parts) != 2:
+            updated_lines.append(s)
+            continue
+        rel_p = parts[1].lstrip("*")
+        target_f = root / rel_p
+        digest = hashlib.sha256(target_f.read_bytes()).hexdigest() if target_f.exists() else parts[0].lower()
+        updated_lines.append(f"{digest}  {rel_p}")
+    sums_path.write_text("\n".join(updated_lines) + "\n", encoding="utf-8", newline="\n")
+
+
 def _write_derived_outputs(data: dict) -> None:
     REPORT_MD.write_text(render_markdown(data), encoding="utf-8", newline="\n")
     WEB_BENCH_MJS.write_text(render_web_mjs(data), encoding="utf-8", newline="\n")
     CHART_SVG.parent.mkdir(parents=True, exist_ok=True)
     CHART_SVG.write_text(render_svg_chart(data), encoding="utf-8", newline="\n")
+    e2e_script = ROOT / "scripts" / "verify-web-e2e-chromium.py"
+    if e2e_script.exists() and any(shutil.which(c) for c in ("chromium", "chromium-browser", "google-chrome")):
+        subprocess.run([sys.executable, str(e2e_script), "--rasterize-chart-only"], check=True)
+    refresh_sha256sums(ROOT)
 
 
 def main() -> int:

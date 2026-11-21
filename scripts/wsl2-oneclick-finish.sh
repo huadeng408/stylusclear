@@ -4,7 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-export PATH="$HOME/.foundry/bin:$HOME/.cargo/bin:/usr/local/bin:$PATH"
+# shellcheck source=scripts/deploy-common.sh
+source "$ROOT_DIR/scripts/deploy-common.sh"
+
 OFFLINE_TOOLCHAIN_DIR="${STYLUSCLEAR_ENTITY_DIR:-}"
 RUN_FULL_VERIFY="${RUN_FULL_VERIFY:-0}"
 SKIP_DEPLOY=0
@@ -63,4 +65,4 @@ else
   echo "[wsl2-finish] NOTE: Never submit an older pre-v1.2.0 MP4 with v1.2.0 metrics. Re-record live clip and run: bash scripts/build-final-video.sh <clip.mp4>"
 fi
 
-echo "[wsl2-finish] Complete. Review 'git status' then run: git add deployments web/deployments docs/benchmarks web/benchmarks.generated.mjs docs/assets && git commit -m 'chore: record live testnet deployments and benchmarks' && git push origin main"
+echo "[wsl2-finish] Complete. Review 'git status' then run: git add -- deployments web/deployments docs/benchmarks web/benchmarks.generated.mjs docs/assets/gas-comparison-chart.svg docs/assets/gas-comparison-chart.png SHA256SUMS.txt && git commit -m 'chore: record live testnet deployments and benchmarks' && git push origin main"

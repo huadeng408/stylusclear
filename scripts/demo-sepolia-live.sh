@@ -5,42 +5,40 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-if [[ -f "$HOME/.cache/stylusclear_entity_sandbox/activate_env.sh" ]]; then
-  # shellcheck disable=SC1091
-  source "$HOME/.cache/stylusclear_entity_sandbox/activate_env.sh"
-fi
+# shellcheck source=scripts/deploy-common.sh
+source "$ROOT_DIR/scripts/deploy-common.sh"
 
 TARGET_NET="${1:-sepolia}"
 if [[ "$TARGET_NET" == "robinhood" ]]; then
-  DEPLOY_JSON="$ROOT_DIR/deployments/robinhood-testnet.json"
+  DEPLOY_OUT_NAME="robinhood-testnet.json"
   RPC_URL="${ROBINHOOD_RPC_URL:-https://rpc.testnet.chain.robinhood.com}"
   NET_KEY="robinhood_testnet"
 else
-  DEPLOY_JSON="$ROOT_DIR/deployments/arbitrum-sepolia.json"
+  DEPLOY_OUT_NAME="arbitrum-sepolia.json"
   RPC_URL="${ARB_SEPOLIA_RPC_URL:-${SEPOLIA_RPC_URL:-https://sepolia-rollup.arbitrum.io/rpc}}"
   NET_KEY="arbitrum_sepolia"
 fi
+OUT_JSON="$ROOT_DIR/deployments/$DEPLOY_OUT_NAME"
+WEB_JSON="$ROOT_DIR/web/deployments/$DEPLOY_OUT_NAME"
 
-if [[ -z "${PRIVATE_KEY:-}" ]]; then
-  echo "[demo-live] ERROR: PRIVATE_KEY is required to broadcast live demo settlement." >&2
-  exit 1
-fi
-export ETH_PRIVATE_KEY="$PRIVATE_KEY"
+setup_ephemeral_keystore
 
 read -r SOL_ENGINE STYLUS_ADDR TOK0 TOK3 < <(python3 -c '
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
-vals = list(d["assets"].values())
+assets = d.get("assets", {})
+tok0 = assets.get("usdcMock6") or assets.get("usdgMock6") or ""
+tok3 = assets.get("rwaMock18") or assets.get("nvdaxMock18") or ""
 print(
-    d.get("solidityBenchmarkAddress") or "",
+    d.get("solidityBenchmarkAddress") or "null",
     d.get("stylusEngineAddress") or "null",
-    vals[0] or "",
-    vals[3] or "",
+    tok0 or "null",
+    tok3 or "null",
 )
-' "$DEPLOY_JSON")
+' "$OUT_JSON")
 
-if [[ -z "$SOL_ENGINE" || -z "$TOK0" || -z "$TOK3" ]]; then
-  echo "[demo-live] ERROR: Contracts not yet deployed in $DEPLOY_JSON." >&2
+if [[ "$SOL_ENGINE" == "null" || "$TOK0" == "null" || "$TOK3" == "null" ]]; then
+  echo "[demo-live] ERROR: Contracts not yet deployed in $OUT_JSON." >&2
   exit 1
 fi
 
@@ -55,73 +53,106 @@ cast send "$TOK3" "mint(address,uint256)" "$CALLER" 100000000000000000000 --rpc-
 cast send "$TOK3" "approve(address,uint256)" "$SOL_ENGINE" 100000000000000000000 --rpc-url "$RPC_URL" >/dev/null
 cast send "$SOL_ENGINE" "deposit(uint8,uint256)" 3 50000000000000000000 --rpc-url "$RPC_URL" >/dev/null
 
-cast send "$SOL_ENGINE" "registerObligation(address,uint8,uint256)" "$COUNTERPARTY" 0 250000000000000000000 --rpc-url "$RPC_URL" >/dev/null
-TX_JSON="$(cast send "$SOL_ENGINE" "settleBatch(address[],(uint16,uint16,uint8,uint8,uint8,uint64,uint256,uint256,bytes32,bytes32)[],(uint16,uint8,uint8,uint8,uint8,uint8,uint64,uint256,uint256,uint256,bytes32,bytes32)[])" "[$CALLER,$COUNTERPARTY]" "[(0,1,0,0,0,1000000,250000000000000000000,0,0x0000000000000000000000000000000000000000000000000000000000000000,0x0000000000000000000000000000000000000000000000000000000000000000)]" "[]" --rpc-url "$RPC_URL" --json)"
+# Register 1,250 USD confirmed obligation (consumes 250 in authMode=0 live tx, leaves 1,000 confirmed for solver probes)
+cast send "$SOL_ENGINE" "registerObligation(address,uint8,uint256)" "$COUNTERPARTY" 0 1250000000000000000000 --rpc-url "$RPC_URL" >/dev/null
+NONCE_SOL="$(python3 -c 'import secrets; print((secrets.randbits(48) << 8) + 1)')"
+TX_JSON="$(cast send "$SOL_ENGINE" "settleBatch(address[],(uint16,uint16,uint8,uint8,uint8,uint64,uint256,uint256,bytes32,bytes32)[],(uint16,uint8,uint8,uint8,uint8,uint8,uint64,uint256,uint256,uint256,bytes32,bytes32)[])" "[$CALLER,$COUNTERPARTY]" "[(0,1,0,0,0,1000000000,250000000000000000000,$NONCE_SOL,0x0000000000000000000000000000000000000000000000000000000000000000,0x0000000000000000000000000000000000000000000000000000000000000000)]" "[]" --rpc-url "$RPC_URL" --json)"
 TX_HASH="$(printf '%s' "$TX_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['transactionHash'])")"
 echo "[demo-live] Settled Solidity batch tx=$TX_HASH on $TARGET_NET"
 
 STYLUS_TX_HASH=""
 STYLUS_ADDR_CLEAN=""
-if [[ -n "${STYLUS_ADDR:-}" && "$STYLUS_ADDR" != "null" ]]; then
+if is_deployed "$STYLUS_ADDR"; then
   STYLUS_ADDR_CLEAN="$STYLUS_ADDR"
   echo "[demo-live] Executing live settleBatch on Stylus engine: $STYLUS_ADDR_CLEAN"
   cast send "$TOK0" "approve(address,uint256)" "$STYLUS_ADDR_CLEAN" 50000000000 --rpc-url "$RPC_URL" >/dev/null
   cast send "$STYLUS_ADDR_CLEAN" "deposit(uint8,uint256)" 0 25000000000 --rpc-url "$RPC_URL" >/dev/null
-  cast send "$STYLUS_ADDR_CLEAN" "registerObligation(address,uint8,uint256)" "$COUNTERPARTY" 0 250000000000000000000 --rpc-url "$RPC_URL" >/dev/null
+  cast send "$TOK3" "approve(address,uint256)" "$STYLUS_ADDR_CLEAN" 100000000000000000000 --rpc-url "$RPC_URL" >/dev/null
+  cast send "$STYLUS_ADDR_CLEAN" "deposit(uint8,uint256)" 3 50000000000000000000 --rpc-url "$RPC_URL" >/dev/null
+  cast send "$STYLUS_ADDR_CLEAN" "registerObligation(address,uint8,uint256)" "$COUNTERPARTY" 0 1250000000000000000000 --rpc-url "$RPC_URL" >/dev/null
+  NONCE_STY="$(python3 -c 'import secrets; print((secrets.randbits(48) << 8) + 2)')"
   STYLUS_TX_HASH="$(cast send "$STYLUS_ADDR_CLEAN" "settleBatch(address[],(uint16,uint16,uint8,uint8,uint8,uint64,uint256,uint256,bytes32,bytes32)[],(uint16,uint8,uint8,uint8,uint8,uint8,uint64,uint256,uint256,uint256,bytes32,bytes32)[])" \
-    "[$CALLER,$COUNTERPARTY]" "[(0,1,0,0,0,1000000,250000000000000000000,0,0x0000000000000000000000000000000000000000000000000000000000000000,0x0000000000000000000000000000000000000000000000000000000000000000)]" "[]" \
+    "[$CALLER,$COUNTERPARTY]" "[(0,1,0,0,0,1000000000,250000000000000000000,$NONCE_STY,0x0000000000000000000000000000000000000000000000000000000000000000,0x0000000000000000000000000000000000000000000000000000000000000000)]" "[]" \
     --rpc-url "$RPC_URL" --json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('transactionHash',''))")"
   echo "[demo-live] Stylus settleBatch tx=${STYLUS_TX_HASH:-skipped}"
 fi
 
-python3 - "$DEPLOY_JSON" "$ROOT_DIR/web/deployments/$(basename "$DEPLOY_JSON")" "${TX_HASH:-}" "${STYLUS_TX_HASH:-}" <<'PYEOF'
-import json, sys
+SOL_GAS=""
+STY_GAS=""
+if [[ -n "${TX_HASH:-}" ]]; then
+  SOL_GAS="$(cast receipt "$TX_HASH" --rpc-url "$RPC_URL" --json 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); print(int(str(r['gasUsed']),0))" 2>/dev/null || echo "")"
+fi
+if [[ -n "${STYLUS_TX_HASH:-}" ]]; then
+  STY_GAS="$(cast receipt "$STYLUS_TX_HASH" --rpc-url "$RPC_URL" --json 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); print(int(str(r['gasUsed']),0))" 2>/dev/null || echo "")"
+fi
+
+TELEMETRY_NET_KEY="$NET_KEY" \
+TELEMETRY_OUT_JSON="$OUT_JSON" \
+TELEMETRY_WEB_JSON="$WEB_JSON" \
+TELEMETRY_CALLER="$CALLER" \
+TELEMETRY_SOL_ENGINE="$SOL_ENGINE" \
+TELEMETRY_STY_ENGINE="$STYLUS_ADDR_CLEAN" \
+TELEMETRY_SOL_TX="${TX_HASH:-}" \
+TELEMETRY_STY_TX="${STYLUS_TX_HASH:-}" \
+TELEMETRY_SOL_GAS="$SOL_GAS" \
+TELEMETRY_STY_GAS="$STY_GAS" \
+python3 - <<'PYEOF'
+import json, os
 from pathlib import Path
 
-p = Path(sys.argv[1])
-web_p = Path(sys.argv[2])
-if p.exists():
-    d = json.loads(p.read_text(encoding="utf-8"))
-    hashes = [h for h in d.get("verifiedTxHashes", []) if h]
-    for h in sys.argv[3:]:
-        if h and h not in hashes:
-            hashes.append(h)
-    d["verifiedTxHashes"] = hashes
-    serialized = json.dumps(d, indent=2) + "\n"
-    p.write_text(serialized, encoding="utf-8")
-    if web_p.parent.exists():
-        web_p.write_text(serialized, encoding="utf-8")
-PYEOF
+out_p = Path(os.environ["TELEMETRY_OUT_JSON"])
+web_p = Path(os.environ["TELEMETRY_WEB_JSON"])
+manifest = json.loads(out_p.read_text(encoding="utf-8"))
+manifest["demoTraderA"] = os.environ["TELEMETRY_CALLER"]
+hashes = [h for h in manifest.get("verifiedTxHashes", []) if h]
+for h in (os.environ["TELEMETRY_SOL_TX"], os.environ["TELEMETRY_STY_TX"]):
+    if h and h not in hashes:
+        hashes.append(h)
+manifest["verifiedTxHashes"] = hashes
+serialized = json.dumps(manifest, indent=2) + "\n"
+out_p.write_text(serialized, encoding="utf-8", newline="\n")
+if web_p.parent.exists():
+    web_p.write_text(serialized, encoding="utf-8", newline="\n")
 
-if [[ -n "${STYLUS_TX_HASH:-}" || -n "${TX_HASH:-}" ]]; then
-  SOL_GAS="$(cast receipt "${TX_HASH:-}" --rpc-url "$RPC_URL" --json 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); print(int(str(r['gasUsed']),0))" 2>/dev/null || echo "")"
-  STY_GAS="$(cast receipt "${STYLUS_TX_HASH:-}" --rpc-url "$RPC_URL" --json 2>/dev/null | python3 -c "import sys,json; r=json.load(sys.stdin); print(int(str(r['gasUsed']),0))" 2>/dev/null || echo "")"
-  python3 - "$NET_KEY" "$SOL_ENGINE" "$STYLUS_ADDR_CLEAN" "${TX_HASH:-}" "${STYLUS_TX_HASH:-}" "$SOL_GAS" "$STY_GAS" <<'PYEOF'
-import json, sys
-from pathlib import Path
-p = Path("docs/benchmarks/measured-gas-artifacts.json")
-if p.exists():
-    d = json.loads(p.read_text(encoding="utf-8"))
+art_p = Path("docs/benchmarks/measured-gas-artifacts.json")
+if art_p.exists() and (os.environ["TELEMETRY_SOL_TX"] or os.environ["TELEMETRY_STY_TX"]):
+    d = json.loads(art_p.read_text(encoding="utf-8"))
     ov = d.setdefault("onchain_verification", {})
-    net_key = sys.argv[1]
+    net_key = os.environ["TELEMETRY_NET_KEY"]
     rec = ov.setdefault(net_key, {})
-    if sys.argv[2]: rec["solidity_contract_address"] = sys.argv[2]
-    if sys.argv[3]: rec["stylus_contract_address"] = sys.argv[3]
-    if sys.argv[4]: rec["solidity_settle_tx_hash"] = sys.argv[4]
-    if sys.argv[5]: rec["stylus_settle_tx_hash"] = sys.argv[5]
-    if sys.argv[6]: rec["solidity_receipt_gas_used"] = int(sys.argv[6])
-    if sys.argv[7]: rec["stylus_receipt_gas_used"] = int(sys.argv[7])
+    if os.environ["TELEMETRY_SOL_ENGINE"]:
+        rec["solidity_contract_address"] = os.environ["TELEMETRY_SOL_ENGINE"]
+    if os.environ["TELEMETRY_STY_ENGINE"]:
+        rec["stylus_contract_address"] = os.environ["TELEMETRY_STY_ENGINE"]
+    if manifest.get("stylusWasmBytecodeAddress"):
+        rec["stylus_wasm_bytecode_address"] = manifest["stylusWasmBytecodeAddress"]
+    if manifest.get("stylusActivationStatus"):
+        rec["stylus_activation_status"] = manifest["stylusActivationStatus"]
+    if os.environ["TELEMETRY_SOL_TX"]:
+        rec["solidity_settle_tx_hash"] = os.environ["TELEMETRY_SOL_TX"]
+    if os.environ["TELEMETRY_STY_TX"]:
+        rec["stylus_settle_tx_hash"] = os.environ["TELEMETRY_STY_TX"]
+    if os.environ["TELEMETRY_SOL_GAS"]:
+        rec["solidity_receipt_gas_used"] = int(os.environ["TELEMETRY_SOL_GAS"])
+    if os.environ["TELEMETRY_STY_GAS"]:
+        rec["stylus_receipt_gas_used"] = int(os.environ["TELEMETRY_STY_GAS"])
+    primary_tx = os.environ["TELEMETRY_STY_TX"] or os.environ["TELEMETRY_SOL_TX"]
     if net_key == "arbitrum_sepolia":
-        if sys.argv[5] or sys.argv[4]: ov["arbitrum_sepolia_tx"] = sys.argv[5] or sys.argv[4]
-        if sys.argv[7]: ov["arbitrum_sepolia_stylus_gas"] = int(sys.argv[7])
-        if sys.argv[6]: ov["arbitrum_sepolia_solidity_gas"] = int(sys.argv[6])
-    elif net_key == "robinhood_testnet":
-        if sys.argv[5] or sys.argv[4]: ov["robinhood_testnet_tx"] = sys.argv[5] or sys.argv[4]
+        if primary_tx:
+            ov["arbitrum_sepolia_tx"] = primary_tx
+        if os.environ["TELEMETRY_STY_GAS"]:
+            ov["arbitrum_sepolia_stylus_gas"] = int(os.environ["TELEMETRY_STY_GAS"])
+        if os.environ["TELEMETRY_SOL_GAS"]:
+            ov["arbitrum_sepolia_solidity_gas"] = int(os.environ["TELEMETRY_SOL_GAS"])
+    elif net_key == "robinhood_testnet" and primary_tx:
+        ov["robinhood_testnet_tx"] = primary_tx
     if ov.get("arbitrum_sepolia_tx") and ov.get("robinhood_testnet_tx"):
         d["calibration_status"] = "dual_chain_onchain_verified"
     elif ov.get("arbitrum_sepolia_tx"):
         d["calibration_status"] = "arbitrum_sepolia_onchain_verified"
-    p.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8", newline="\n")
+    art_p.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8", newline="\n")
 PYEOF
+
+if [[ -n "${STYLUS_TX_HASH:-}" || -n "${TX_HASH:-}" ]]; then
   python3 scripts/generate-benchmarks.py --render-from-json
 fi

@@ -7,6 +7,8 @@
   "wasmArtifact": "artifacts/clearing_stylus.wasm",
   "atomicFactoryContract": null,
   "stylusEngineAddress": null,
+  "stylusWasmBytecodeAddress": null,
+  "stylusActivationStatus": "pending_broadcast",
   "solidityBenchmarkAddress": null,
   "demoTraderA": "0x1111111111111111111111111111111111111111",
   "demoTraderB": "0x2222222222222222222222222222222222222222",

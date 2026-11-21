@@ -22,7 +22,10 @@ FORBIDDEN_GLOBAL_PATTERNS = [
 REQUIRED_FILES = [
     "Cargo.toml",
     "Cargo.lock",
+    "rust-toolchain.toml",
     "Dockerfile.stylus-reproducible",
+    ".github/workflows/ci.yml",
+    ".github/workflows/pages.yml",
     "2-DEPLOY-AND-PUSH.cmd",
     "SHA256SUMS.txt",
     "artifacts/clearing_stylus.wasm",
@@ -41,7 +44,10 @@ REQUIRED_FILES = [
     "docs/security/z3-formal-proofs.json",
     "docs/assets/gas-comparison-chart.svg",
     "docs/assets/gas-comparison-chart.png",
+    "scripts/deploy-common.sh",
+    "scripts/deploy-sepolia.sh",
     "scripts/deploy-robinhood-testnet.sh",
+    "scripts/demo-sepolia-live.sh",
     "scripts/build-final-video.sh",
     "scripts/verify-web-e2e-chromium.py",
 ]
@@ -105,11 +111,14 @@ def check_repo(root: Path, strict: bool = False) -> list[str]:
     if re.search(r"(?<!\S)\.(?:rs|sol)\b|\w\.(?:rs|sol)\b", ctx_text):
         errors.append("CONTEXT.md leaks .rs/.sol file extension")
 
-    # 2) Dockerfile.stylus-reproducible must include Cargo.lock, --locked, .cargo, binaryen, and non-root USER
+    # 2) Dockerfile.stylus-reproducible, rust-toolchain.toml & ci.yml must pin matching Rust 1.100.0 + SHA-256 verified Binaryen version_133
     dk = (root / "Dockerfile.stylus-reproducible").read_text(encoding="utf-8")
-    for tok in ("Cargo.lock", "--locked", "binaryen", ".cargo", "USER "):
+    for tok in ("Cargo.lock", "--locked", "binaryen", ".cargo", "USER ", "1.100.0", "version_133", "sha256sum -c"):
         if tok not in dk:
             errors.append(f"Dockerfile.stylus-reproducible missing '{tok}'")
+    rt_toml = root / "rust-toolchain.toml"
+    if rt_toml.exists() and 'channel = "1.100.0"' not in rt_toml.read_text(encoding="utf-8"):
+        errors.append('rust-toolchain.toml must pin channel = "1.100.0" for <24 KiB WASM reproducibility')
 
     # 3) check.sh must NOT monkey-patch stylus-sdk
     chk = (root / "scripts" / "check.sh").read_text(encoding="utf-8")
@@ -176,13 +185,47 @@ def check_repo(root: Path, strict: bool = False) -> list[str]:
                 if " " in m.group(1):
                     errors.append(f"{md_target.relative_to(root)}: broken Markdown URL with unescaped spaces: {m.group(1)[:60]}")
 
-    # 5e) CI workflow must install ruff & mypy
+    # 5e) CI workflow must install ruff, mypy, Rust 1.100.0 & SHA-256 verified Binaryen version_133; Pages must stage web/app.mjs
     ci_yml = root / ".github" / "workflows" / "ci.yml"
     if ci_yml.exists():
         cit = ci_yml.read_text(encoding="utf-8")
-        for req_pkg in ("ruff", "mypy"):
+        for req_pkg in ("ruff", "mypy", "1.100.0", "version_133", "sha256sum -c"):
             if req_pkg not in cit:
-                errors.append(f".github/workflows/ci.yml missing required QA tool '{req_pkg}'")
+                errors.append(f".github/workflows/ci.yml missing required QA/reproducibility pin '{req_pkg}'")
+    pages_yml = root / ".github" / "workflows" / "pages.yml"
+    if pages_yml.exists():
+        ptxt = pages_yml.read_text(encoding="utf-8")
+        if "web/app.mjs" not in ptxt:
+            errors.append(".github/workflows/pages.yml must stage web/app.mjs alongside web/index.html")
+
+    # 5g) Deployment script checkpoint keys, ArbWasm activationGas pause guard & zero-CLI-leak keystore auth
+    sep_manifest = json.loads((root / "deployments" / "arbitrum-sepolia.json").read_text(encoding="utf-8"))
+    rob_manifest = json.loads((root / "deployments" / "robinhood-testnet.json").read_text(encoding="utf-8"))
+    for sh_rel, manifest in (
+        ("scripts/deploy-sepolia.sh", sep_manifest),
+        ("scripts/deploy-robinhood-testnet.sh", rob_manifest),
+    ):
+        stxt = (root / sh_rel).read_text(encoding="utf-8")
+        used_assets = set(re.findall(r'ensure_contract\s+"assets\.([^"]+)"', stxt))
+        expected_assets = set(manifest.get("assets", {}).keys())
+        if not used_assets or used_assets != expected_assets:
+            errors.append(f"{sh_rel}: checkpoint asset keys {sorted(used_assets)} != manifest keys {sorted(expected_assets)}")
+        if 'ensure_contract "atomicFactoryContract"' not in stxt:
+            errors.append(f"{sh_rel}: must checkpoint factory under manifest key atomicFactoryContract")
+    common_txt = (root / "scripts" / "deploy-common.sh").read_text(encoding="utf-8")
+    if "activationGas()(uint64)" not in common_txt:
+        errors.append("scripts/deploy-common.sh: missing ArbWasm activationGas() pause probe")
+    for sh_rel in (
+        "scripts/deploy-common.sh",
+        "scripts/deploy-sepolia.sh",
+        "scripts/deploy-robinhood-testnet.sh",
+        "scripts/demo-sepolia-live.sh",
+    ):
+        stxt = (root / sh_rel).read_text(encoding="utf-8")
+        if "ETH_PRIVATE_KEY=" in stxt:
+            errors.append(f"{sh_rel}: relies on unsupported ETH_PRIVATE_KEY")
+        if re.search(r"openssl\b[^\n]*\s-K\b", stxt):
+            errors.append(f"{sh_rel}: leaks symmetric key via openssl -K CLI argv")
 
     # 5f) Cross-language 19 custom error parity (Solidity ISettlementEngine.sol vs web/rpc-client.ts)
     sol_iface = (root / "contracts" / "src" / "ISettlementEngine.sol").read_text(encoding="utf-8")

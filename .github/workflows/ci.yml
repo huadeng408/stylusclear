@@ -13,11 +13,17 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install Binaryen & Python QA packages
+      - name: Install Binaryen version_133 (SHA-256 verified) & Python QA packages
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends binaryen shellcheck
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends curl ca-certificates shellcheck
+          curl -fsSL https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-x86_64-linux.tar.gz -o /tmp/binaryen.tar.gz
+          echo "2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489  /tmp/binaryen.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/binaryen.tar.gz -C /usr/local --strip-components=1
+          rm -f /tmp/binaryen.tar.gz
+          wasm-opt --version
           python3 -m pip install --upgrade --break-system-packages pytest hypothesis z3-solver brotli eth-account eth-abi ruff mypy
-      - uses: dtolnay/rust-toolchain@1.91.0
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           targets: wasm32-unknown-unknown
           components: clippy, rustfmt

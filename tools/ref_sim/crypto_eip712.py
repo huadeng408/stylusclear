@@ -342,3 +342,104 @@ def sign_obligation_attestation(
         "r": "0x" + r.hex(),
         "s": "0x" + s.hex(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Pure-Python FIPS-197 AES-128-CTR & Web3 Secret Storage v3 Keystore Builder
+# (Zero child processes, zero /proc/<pid>/cmdline key exposure)
+# ---------------------------------------------------------------------------
+
+_AES_SBOX = bytes.fromhex(
+    "637c777bf26b6fc53001672bfed7ab76ca82c97dfa5947f0add4a2af9ca472c0"
+    "b7fd9326363ff7cc34a5e5f171d8311504c723c31896059a071280e2eb27b275"
+    "09832c1a1b6e5aa0523bd6b329e32f8453d100ed20fcb15b6acbbe394a4c58cf"
+    "d0efaafb434d338545f9027f503c9fa851a3408f929d38f5bcb6da2110fff3d2"
+    "cd0c13ec5f974417c4a77e3d645d197360814fdc222a908846eeb814de5e0bdb"
+    "e0323a0a4906245cc2d3ac629195e479e7c8376d8dd54ea96c56f4ea657aae08"
+    "ba78252e1ca6b4c6e8dd741f4bbd8b8a703eb5664803f60e613557b986c11d9e"
+    "e1f8981169d98e949b1e87e9ce5528df8ca1890dbfe6426841992d0fb054bb16"
+)
+_RCON = (0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36)
+
+
+def _xtime(a: int) -> int:
+    return ((a << 1) ^ 0x1B) & 0xFF if (a & 0x80) else (a << 1)
+
+
+def _aes128_expand_key(key16: bytes) -> list[list[int]]:
+    if len(key16) != 16:
+        raise ValueError("AES-128 key must be 16 bytes")
+    w = [list(key16[i : i + 4]) for i in range(0, 16, 4)]
+    for i in range(4, 44):
+        temp = list(w[i - 1])
+        if i % 4 == 0:
+            temp = [_AES_SBOX[temp[1]] ^ _RCON[(i // 4) - 1], _AES_SBOX[temp[2]], _AES_SBOX[temp[3]], _AES_SBOX[temp[0]]]
+        w.append([w[i - 4][j] ^ temp[j] for j in range(4)])
+    return [[w[r * 4 + c][b] for c in range(4) for b in range(4)] for r in range(11)]
+
+
+def _aes128_encrypt_block(block16: bytes, round_keys: list[list[int]]) -> bytes:
+    s = [block16[i] ^ round_keys[0][i] for i in range(16)]
+    for rnd in range(1, 10):
+        s = [_AES_SBOX[b] for b in s]
+        s = [
+            s[0], s[5], s[10], s[15],
+            s[4], s[9], s[14], s[3],
+            s[8], s[13], s[2], s[7],
+            s[12], s[1], s[6], s[11],
+        ]
+        for c in range(0, 16, 4):
+            a0, a1, a2, a3 = s[c], s[c + 1], s[c + 2], s[c + 3]
+            t = a0 ^ a1 ^ a2 ^ a3
+            s[c] ^= t ^ _xtime(a0 ^ a1)
+            s[c + 1] ^= t ^ _xtime(a1 ^ a2)
+            s[c + 2] ^= t ^ _xtime(a2 ^ a3)
+            s[c + 3] ^= t ^ _xtime(a3 ^ a0)
+        rk = round_keys[rnd]
+        s = [s[i] ^ rk[i] for i in range(16)]
+    s = [_AES_SBOX[b] for b in s]
+    s = [
+        s[0], s[5], s[10], s[15],
+        s[4], s[9], s[14], s[3],
+        s[8], s[13], s[2], s[7],
+        s[12], s[1], s[6], s[11],
+    ]
+    rk10 = round_keys[10]
+    return bytes(s[i] ^ rk10[i] for i in range(16))
+
+
+def encrypt_aes128_ctr(key16: bytes, iv16: bytes, data: bytes) -> bytes:
+    if len(iv16) != 16:
+        raise ValueError("AES-128-CTR IV must be 16 bytes")
+    rks = _aes128_expand_key(key16)
+    ctr = int.from_bytes(iv16, "big")
+    out = bytearray()
+    for off in range(0, len(data), 16):
+        ks = _aes128_encrypt_block(((ctr + (off // 16)) & ((1 << 128) - 1)).to_bytes(16, "big"), rks)
+        chunk = data[off : off + 16]
+        out.extend(b ^ k for b, k in zip(chunk, ks[: len(chunk)], strict=True))
+    return bytes(out)
+
+
+def build_web3_keystore_v3(privkey_bytes: bytes, password: str, salt32: bytes, iv16: bytes, key_uuid: str) -> dict[str, object]:
+    import hashlib
+
+    if len(privkey_bytes) != 32:
+        raise ValueError("Private key must be 32 bytes")
+    dk = hashlib.scrypt(password.encode("utf-8"), salt=salt32, n=4096, r=8, p=1, maxmem=64 * 1024 * 1024, dklen=32)
+    ct = encrypt_aes128_ctr(dk[:16], iv16, privkey_bytes)
+    mac = keccak256(dk[16:32] + ct).hex()
+    addr = privkey_to_address(int.from_bytes(privkey_bytes, "big"))[2:].lower()
+    return {
+        "version": 3,
+        "id": key_uuid,
+        "address": addr,
+        "crypto": {
+            "cipher": "aes-128-ctr",
+            "cipherparams": {"iv": iv16.hex()},
+            "ciphertext": ct.hex(),
+            "kdf": "scrypt",
+            "kdfparams": {"dklen": 32, "n": 4096, "p": 1, "r": 8, "salt": salt32.hex()},
+            "mac": mac,
+        },
+    }

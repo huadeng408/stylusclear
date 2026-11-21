@@ -1,13 +1,25 @@
-# Reproducible WASM 1.0 MVP build environment for StylusClear v1.1.0 (zero curl|sh)
-FROM rust:1.91.0-slim-bookworm
+# Reproducible WASM 1.0 MVP build environment for StylusClear v1.2.0 (zero curl|sh, SHA-256 verified)
+FROM rust:1.100.0-slim-bookworm
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    binaryen \
+    curl \
     python3 \
     python3-brotli \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
+    && ARCH="$(uname -m)" \
+    && case "$ARCH" in \
+         x86_64) BIN_ARCH="x86_64"; BIN_SHA="2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489" ;; \
+         aarch64|arm64) BIN_ARCH="aarch64"; BIN_SHA="89c07ea56faf38d0fbecf36ca8ec0721756716185f265b568e133d427f299bf8" ;; \
+         *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-${BIN_ARCH}-linux.tar.gz" -o /tmp/binaryen.tar.gz \
+    && echo "${BIN_SHA}  /tmp/binaryen.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/binaryen.tar.gz -C /usr/local --strip-components=1 \
+    && rm -f /tmp/binaryen.tar.gz \
     && rustup target add wasm32-unknown-unknown
 
 WORKDIR /workspace
@@ -16,7 +28,7 @@ COPY .cargo ./.cargo
 COPY crates ./crates
 COPY scripts/optimize-wasm-mvp.py ./scripts/optimize-wasm-mvp.py
 
-RUN cargo build --locked --release --target wasm32-unknown-unknown -p clearing-stylus \
+RUN cargo build --locked --release --target wasm32-unknown-unknown -p clearing-stylus --no-default-features \
     && python3 scripts/optimize-wasm-mvp.py \
        target/wasm32-unknown-unknown/release/clearing_stylus.wasm \
        artifacts/clearing_stylus.wasm --json

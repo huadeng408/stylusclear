@@ -285,9 +285,32 @@ def _rasterize_svg_chart(cdp: _CdpClient, tmp_dir: Path) -> None:
     print(f"[chromium-e2e] Rasterized 2x Retina chart: {png_path.relative_to(ROOT)} ({len(raw_png):,} B)")
 
 
+def _refresh_sha256sums() -> None:
+    import hashlib
+
+    sums_path = ROOT / "SHA256SUMS.txt"
+    if not sums_path.exists():
+        return
+    updated: list[str] = []
+    for raw_line in sums_path.read_text(encoding="utf-8").splitlines():
+        s = raw_line.strip()
+        if not s:
+            continue
+        parts = s.split(None, 1)
+        if len(parts) != 2:
+            updated.append(s)
+            continue
+        rel_p = parts[1].lstrip("*")
+        target_f = ROOT / rel_p
+        digest = hashlib.sha256(target_f.read_bytes()).hexdigest() if target_f.exists() else parts[0].lower()
+        updated.append(f"{digest}  {rel_p}")
+    sums_path.write_text("\n".join(updated) + "\n", encoding="utf-8", newline="\n")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--capture-assets", action="store_true", help="Also regenerate docs/assets/*.png screenshots & chart")
+    ap.add_argument("--rasterize-chart-only", action="store_true", help="Re-rasterize docs/assets/gas-comparison-chart.png from SVG")
     args = ap.parse_args()
 
     chromium = find_chromium()
@@ -295,6 +318,21 @@ def main() -> int:
         if os.environ.get("REQUIRE_CHROMIUM", "0") == "1":
             raise SystemExit("Chromium not found but REQUIRE_CHROMIUM=1")
         print("[chromium-e2e] Chromium not installed; skipping headless E2E")
+        return 0
+
+    if args.rasterize_chart_only:
+        with tempfile.TemporaryDirectory(prefix="sc_cdp_") as tmp_dir:
+            proc, cdp = _launch_cdp(chromium, tmp_dir)
+            try:
+                _rasterize_svg_chart(cdp, Path(tmp_dir))
+            finally:
+                cdp.close()
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+        _refresh_sha256sums()
         return 0
 
     httpd, port, bind_host = _start_server(WEB_DIR)
@@ -332,6 +370,8 @@ def main() -> int:
             httpd.shutdown()
             httpd.server_close()
 
+    if args.capture_assets:
+        _refresh_sha256sums()
     print("[chromium-e2e] ALL 3 VIEWPORTS & 4 SCENARIOS PASSED")
     return 0
 
