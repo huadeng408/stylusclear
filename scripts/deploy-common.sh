@@ -11,6 +11,17 @@ setup_stylusclear_env() {
 setup_stylusclear_env
 
 STYLUSCLEAR_TMP_KS=""
+OUT_JSON="${OUT_JSON:-}"
+WEB_JSON="${WEB_JSON:-}"
+ACTUAL_CHAIN="${ACTUAL_CHAIN:-0}"
+RPC_URL="${RPC_URL:-}"
+CHAIN_ID_EXPECTED="${CHAIN_ID_EXPECTED:-0}"
+DEPLOY_OUT_NAME="${DEPLOY_OUT_NAME:-}"
+COMPILED_JSON="${COMPILED_JSON:-}"
+INITCODE_HEX_FILE="${INITCODE_HEX_FILE:-}"
+DEPLOYER_ADDR="${DEPLOYER_ADDR:-}"
+REQUIRE_STYLUS="${REQUIRE_STYLUS:-1}"
+USE_ATOMIC_FACTORY="${USE_ATOMIC_FACTORY:-1}"
 cleanup_ephemeral_keystore() {
   if [[ -n "${STYLUSCLEAR_TMP_KS:-}" && -d "$STYLUSCLEAR_TMP_KS" ]]; then
     rm -rf "$STYLUSCLEAR_TMP_KS"
@@ -214,10 +225,10 @@ deploy_or_stage_stylus_engine() {
   topic0="$(cast keccak 'EngineAtomicallyDeployed(address,address,bytes32,bool,bool)')"
   echo "[deploy] Deploying + activating Stylus engine atomically via StylusAtomicFactory ($factory_addr)..." >&2
   tx_json="$(cast send "$factory_addr" "deployAndInitialize(bytes,bytes32,address,bool)" "$initcode" "$salt" "$deployer_addr" false --value 0.002ether --rpc-url "$RPC_URL" --json)"
-  stylus_engine="$(printf '%s' "$tx_json" | python3 - "$topic0" <<'PYEOF'
-import json, sys
+  stylus_engine="$(TX_JSON_ENV="$tx_json" python3 - "$topic0" <<'PYEOF'
+import json, os, sys
 topic0 = sys.argv[1].lower()
-d = json.load(sys.stdin)
+d = json.loads(os.environ["TX_JSON_ENV"])
 for log in d.get("logs", []):
     topics = log.get("topics", [])
     if topics and topics[0].lower() == topic0 and len(topics) >= 2:
