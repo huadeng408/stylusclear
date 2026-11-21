@@ -11,11 +11,11 @@ LIVE_CLIP="${1:-}"
 command -v ffmpeg >/dev/null 2>&1 || { echo "[ERROR] ffmpeg required" >&2; exit 1; }
 command -v ffprobe >/dev/null 2>&1 || { echo "[ERROR] ffprobe required" >&2; exit 1; }
 
-SEG1="$KIT/seg1_hook.mp4"                        # 31.0s (00:00 - 00:31)
-SEG2="$KIT/seg2_workbench.mp4"                   # 59.0s (00:31 - 01:30)
-SEG3="$KIT/seg3_bridge.mp4"                      # 25.0s (01:30 - 01:55)
-SEG3_LIVE_FALLBACK="$KIT/seg3_live_fallback.mp4" # 32.0s (01:55 - 02:27)
-SEG4="$KIT/seg4_rigor.mp4"                       # 46.0s (02:27 - 03:13)
+SEG1="$KIT/seg1_hook.mp4"                        # 32.0s (00:00 - 00:32)
+SEG2="$KIT/seg2_workbench.mp4"                   # 49.0s (00:32 - 01:21)
+SEG3="$KIT/seg3_bridge.mp4"                      # 27.0s (01:21 - 01:48)
+SEG3_LIVE_FALLBACK="$KIT/seg3_live_fallback.mp4" # 32.0s (01:48 - 02:20) real local capture (workbench + judge gates)
+SEG4="$KIT/seg4_rigor.mp4"                       # 38.0s (02:20 - 02:58)  => 178.0s total (< 3:00)
 AUDIO="$KIT/master_audio.m4a"
 [[ -f "$AUDIO" ]] || AUDIO="$KIT/master_audio.wav"
 SUBS_SRT="$KIT/subtitles.srt"
@@ -55,7 +55,7 @@ dur = float(probe.get("format", {}).get("duration", 0.0))
 if w < 1280 or h < 720:
     raise SystemExit(f"[ERROR] Live clip resolution {w}x{h} below minimum 1280x720")
 if dur < 30.0:
-    raise SystemExit(f"[ERROR] Live clip duration {dur:.2f}s < 30.0s minimum (would desync 193s audio/subtitles)")
+    raise SystemExit(f"[ERROR] Live clip duration {dur:.2f}s < 30.0s minimum (would desync 178s audio/subtitles)")
 print(f"[video] Live clip pre-check OK: {w}x{h}, {dur:.2f}s")
 PYEOF
   echo "[video] Normalizing live clip to exact 32.0s 1080p60 (tpad clone for 30-32s clips)..."
@@ -63,7 +63,7 @@ PYEOF
     -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=#0B1020,setsar=1,tpad=stop_mode=clone:stop_duration=2.5" \
     -c:v libx264 -profile:v high -level 4.2 -pix_fmt yuv420p -an "$TMP_DIR/live_32s.mp4" 2>"$TMP_DIR/ffmpeg.log" || { cat "$TMP_DIR/ffmpeg.log" >&2; exit 1; }
 elif [[ -f "$SEG3_LIVE_FALLBACK" ]]; then
-  echo "[video] Using cloud-rendered 32s interactive fallback clip (no live clip supplied)..."
+  echo "[video] Using 32s real local-capture fallback clip (workbench + judge gates; no live testnet clip supplied)..."
   ln -sf "$(cd "$(dirname "$SEG3_LIVE_FALLBACK")" && pwd)/$(basename "$SEG3_LIVE_FALLBACK")" "$TMP_DIR/live_32s.mp4"
 else
   echo "[ERROR] Missing live clip and fallback $SEG3_LIVE_FALLBACK" >&2
@@ -92,7 +92,7 @@ fi
 OUT_ABS="$(cd "$(dirname "$OUT")" 2>/dev/null && pwd)/$(basename "$OUT")"
 mkdir -p "$(dirname "$OUT_ABS")"
 
-echo "[video] Stitching 31+59+25+32+46 = 193.0s 1080p60 timeline + 48kHz audio + burned-in ASS & mov_text..."
+echo "[video] Stitching 32+49+27+32+38 = 178.0s 1080p60 timeline + 48kHz audio + burned-in ASS & mov_text..."
 (
   cd "$TMP_DIR"
   ffmpeg -y -f concat -safe 0 -i concat.txt -i "audio_in.${AUDIO##*.}" -i subs.srt \
@@ -119,7 +119,7 @@ assert v and int(v["width"]) == 1920 and int(v["height"]) == 1080, f"Video not 1
 assert v.get("pix_fmt") == "yuv420p", f"Unexpected pix_fmt: {v.get('pix_fmt')}"
 assert a is not None, "Missing audio stream"
 assert sub is not None, "Missing mov_text subtitle stream"
-assert 192.5 <= dur <= 193.5, f"Final video duration {dur:.2f}s outside [192.5, 193.5]s"
+assert 177.5 <= dur <= 178.5, f"Final video duration {dur:.2f}s outside [177.5, 178.5]s"
 print(f"[video] Post-build ffprobe gate OK: 1920x1080 yuv420p, audio+subs present, duration={dur:.2f}s")
 PYEOF
 

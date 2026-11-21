@@ -1,38 +1,53 @@
 [Script Info]
-Title: StylusClear v1.2.0 Demo Subtitles
+Title: StylusClear v1.2.0 demo captions
 ScriptType: v4.00+
 PlayResX: 1920
 PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Inter,42,&H00F4F8FF,&H0000FFFF,&H00070B14,&HB8070B14,-1,0,0,0,100,100,0,0,3,3,0,2,90,90,42,1
+Style: Default,Inter,40,&H00F8FAFC,&H000000FF,&H00201008,&H70000000,1,0,0,0,100,100,0,0,1,2.2,0.8,2,120,120,30,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.20,0:00:05.50,Default,,0,0,0,,Institutional DeFi desks hit EVM block gas\Nlimits under cold-storage clearing.
-Dialogue: 0,0:00:05.50,0:00:11.50,Default,,0,0,0,,Multilateral debt netting & batch auctions\Nquickly saturate standard EVM execution.
-Dialogue: 0,0:00:11.50,0:00:17.50,Default,,0,0,0,,StylusClear v1.2.0 solves this in no_std\NRust compiled for Arbitrum Stylus.
-Dialogue: 0,0:00:17.50,0:00:24.50,Default,,0,0,0,,Zero-patch WASM 1.0 MVP: 24,518 B Brotli-q11\N(54 B below 24 KiB legacy & 96 KB ArbOS 61 caps).
-Dialogue: 0,0:00:24.50,0:00:30.60,Default,,0,0,0,,Zero floating-point or post-MVP opcodes,\Nverified via Binaryen wasm-opt --mvp-features.
-Dialogue: 0,0:00:31.20,0:00:37.50,Default,,0,0,0,,Scenario 1 clears a 4-desk institutional ring:\N$13,200 gross compressed to $1,050 residual.
-Dialogue: 0,0:00:37.50,0:00:44.50,Default,,0,0,0,,92.05% settlement liquidity saved across 2\Nmultilateral cycles + 2.00 WETH @ $2,850.
-Dialogue: 0,0:00:44.50,0:00:51.50,Default,,0,0,0,,Scaling the canonical 2-Origin BFS mesh to\N24 and 64 desks runs in under 5 milliseconds.
-Dialogue: 0,0:00:51.50,0:00:58.50,Default,,0,0,0,,Scenario 2 triggers our fail-closed oracle\Nband guard: LimitPriceViolated.
-Dialogue: 0,0:00:58.50,0:01:05.50,Default,,0,0,0,,The entire batch rolls back atomically with\N0.00% compression and zero partial state.
-Dialogue: 0,0:01:05.50,0:01:13.50,Default,,0,0,0,,Scenario 4: Robinhood Chain Testnet (46630)\Nclearing USDG + tokenized equity NVDAx.
-Dialogue: 0,0:01:13.50,0:01:22.00,Default,,0,0,0,,$24,000 gross obligations compressed to\N$1,400 residual — 94.17% liquidity saved.
-Dialogue: 0,0:01:22.00,0:01:29.50,Default,,0,0,0,,Adaptive floor-capped liquidation protects\Nborrowers and guarantees vault solvency.
-Dialogue: 0,0:01:30.20,0:01:37.00,Default,,0,0,0,,Dual-chain ready: Arbitrum Sepolia (421614)\Nand Robinhood Chain Testnet (46630).
-Dialogue: 0,0:01:37.00,0:01:45.00,Default,,0,0,0,,Payable StylusAtomicFactory binds CREATE2\Nsalt to caller + admin under strict CEI.
-Dialogue: 0,0:01:45.00,0:01:53.00,Default,,0,0,0,,Detects 0xEFF000 Stylus bytecode, activates\Nvia ArbWasm (0x71), and initializes atomically.
-Dialogue: 0,0:01:53.00,0:02:01.00,Default,,0,0,0,,Strict ERC-20 balance-delta checks guard\Nevery deposit, withdraw, and fee sweep.
-Dialogue: 0,0:02:01.00,0:02:09.00,Default,,0,0,0,,Identical read-only reentrancy guards across\Nall 37 ABI methods and 19 custom errors.
-Dialogue: 0,0:02:09.00,0:02:18.00,Default,,0,0,0,,Keyless eth_call dual-VM parity verification\Nworks directly from workbench or CLI.
-Dialogue: 0,0:02:18.00,0:02:26.50,Default,,0,0,0,,Run one-click dual-chain deploy to populate\Nlive receipts on Arbiscan & Robinhood Explorer.
-Dialogue: 0,0:02:27.20,0:02:35.00,Default,,0,0,0,,Strictly isomorphic benchmarks: 2, 9, 33, 45\Neliminated cycles on both Foundry & Rust.
-Dialogue: 0,0:02:35.00,0:02:43.50,Default,,0,0,0,,Stress tier drops from 18.30M cold EVM gas\Nto 2.26M Stylus est.: -87.7% (5.71x exec (4.69x e2e) savings).
-Dialogue: 0,0:02:43.50,0:02:51.00,Default,,0,0,0,,Comfortably below Arbitrum's 32M single-block\Ngas cap under EIP-2929 vm.cool() cold slots.
-Dialogue: 0,0:02:51.00,0:02:59.50,Default,,0,0,0,,6/6 Z3 SMT theorems PROVED_UNSAT + 100/100\NHypothesis fuzz runs cross-checked vs Rust CLI.
-Dialogue: 0,0:02:59.50,0:03:06.50,Default,,0,0,0,,18/18 Foundry, 9/9 Cargo (0 clippy), 9/9\NPytest, and 37-method Seam S3 gates passing.
-Dialogue: 0,0:03:06.50,0:03:12.60,Default,,0,0,0,,StylusClear v1.2.0 — 5-stage verification\Nin under 60 seconds via verify-judge-60s.sh.
+Dialogue: 0,0:00:00.40,0:00:03.46,Default,,0,0,0,,Institutional desks owe\Neach other in tangled rings.
+Dialogue: 0,0:00:03.48,0:00:08.99,Default,,0,0,0,,Settle every debt one by one, and\Ncapital stays locked while gas explodes.
+Dialogue: 0,0:00:09.28,0:00:15.61,Default,,0,0,0,,At 44 desks, our hardened Solidity\Nreference burns 16.65 million gas.
+Dialogue: 0,0:00:15.86,0:00:21.50,Default,,0,0,0,,StylusClear rebuilds the clearing core\Nin no_std Rust on Arbitrum Stylus.
+Dialogue: 0,0:00:21.52,0:00:28.88,Default,,0,0,0,,The same batch models at 2.92M: 82.5%\Nless gas, while netting away up to 94% of
+Dialogue: 0,0:00:28.90,0:00:30.56,Default,,0,0,0,,the cash that has to move.
+Dialogue: 0,0:00:32.35,0:00:33.98,Default,,0,0,0,,Scenario one.
+Dialogue: 0,0:00:34.00,0:00:37.75,Default,,0,0,0,,Four trading desks owe $13,200 in a loop.
+Dialogue: 0,0:00:37.92,0:00:42.28,Default,,0,0,0,,A canonical 2-origin BFS finds\Nboth cycles and nets them out.
+Dialogue: 0,0:00:42.30,0:00:47.15,Default,,0,0,0,,Only $1,050 still has to\Nmove: 92% less liquidity,
+Dialogue: 0,0:00:47.17,0:00:52.51,Default,,0,0,0,,plus a 2 WETH batch-auction\Nfill at one uniform price.
+Dialogue: 0,0:00:52.90,0:00:55.68,Default,,0,0,0,,Now push a quote 26% outside the oracle band.
+Dialogue: 0,0:00:55.70,0:00:59.15,Default,,0,0,0,,The fail-closed guard reverts\Nwith LimitPriceViolated,
+Dialogue: 0,0:00:59.17,0:01:01.26,Default,,0,0,0,,and the entire batch rolls back.
+Dialogue: 0,0:01:01.28,0:01:03.43,Default,,0,0,0,,Nothing settles halfway.
+Dialogue: 0,0:01:03.81,0:01:10.30,Default,,0,0,0,,On Robinhood Chain Testnet, the same\Nengine nets USDG against tokenized NVDAx:
+Dialogue: 0,0:01:10.32,0:01:12.18,Default,,0,0,0,,$24,000 gross becomes $1,400.
+Dialogue: 0,0:01:12.20,0:01:17.88,Default,,0,0,0,,And a dust-collateral sweep means an\Ninsolvent account can always be closed.
+Dialogue: 0,0:01:21.36,0:01:23.38,Default,,0,0,0,,Shipping is engineered too.
+Dialogue: 0,0:01:23.40,0:01:31.27,Default,,0,0,0,,The engine compiles to plain\NWASM 1.0: 24,518 B after Brotli,
+Dialogue: 0,0:01:31.29,0:01:36.33,Default,,0,0,0,,54 B under the classic 24 KiB cap with\Nits header, and zero float opcodes.
+Dialogue: 0,0:01:36.63,0:01:41.24,Default,,0,0,0,,One atomic factory deploys, activates\Nand initializes it in a single
+Dialogue: 0,0:01:41.26,0:01:46.81,Default,,0,0,0,,transaction, and all 37 methods share\NSolidity-identical reentrancy guards.
+Dialogue: 0,0:01:48.35,0:01:50.80,Default,,0,0,0,,This is the real workbench in Chromium.
+Dialogue: 0,0:01:50.82,0:01:54.80,Default,,0,0,0,,Each preset re-runs the clearing and\Nmargin math right in the browser,
+Dialogue: 0,0:01:54.82,0:01:57.33,Default,,0,0,0,,and the oracle guard blocks the bad quote.
+Dialogue: 0,0:01:57.55,0:02:02.72,Default,,0,0,0,,Drag the mesh to 64 desks, and the\NBFS still answers in milliseconds.
+Dialogue: 0,0:02:03.01,0:02:07.42,Default,,0,0,0,,On the right, the actual 5-stage judge\Ngates on this machine: Rust, Foundry,
+Dialogue: 0,0:02:07.44,0:02:10.34,Default,,0,0,0,,Z3 and the workbench seam, all green.
+Dialogue: 0,0:02:10.36,0:02:15.51,Default,,0,0,0,,Testnet manifests stay empty\Nuntil broadcast. No fake hashes.
+Dialogue: 0,0:02:20.35,0:02:22.76,Default,,0,0,0,,The benchmark is deliberately honest.
+Dialogue: 0,0:02:22.78,0:02:27.94,Default,,0,0,0,,Solidity runs on cold storage slots,\Nand the Stylus model prices every host
+Dialogue: 0,0:02:27.96,0:02:30.72,Default,,0,0,0,,call, including 20k-gas cold nonce writes.
+Dialogue: 0,0:02:30.97,0:02:37.18,Default,,0,0,0,,Savings grow with scale: 41% on\Nsmall batches, 82.5% at stress,
+Dialogue: 0,0:02:37.20,0:02:40.81,Default,,0,0,0,,all under Arbitrum's 32M-gas block cap.
+Dialogue: 0,0:02:41.11,0:02:46.94,Default,,0,0,0,,Six Z3 theorems are proved, and 100\Nfuzzed batches match the compiled Rust
+Dialogue: 0,0:02:46.96,0:02:48.41,Default,,0,0,0,,binary bit for bit.
+Dialogue: 0,0:02:48.76,0:02:49.51,Default,,0,0,0,,StylusClear.
+Dialogue: 0,0:02:49.53,0:02:51.65,Default,,0,0,0,,Clear more, move less.

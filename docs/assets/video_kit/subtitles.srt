@@ -1,129 +1,177 @@
 1
-00:00:00,200 --> 00:00:05,500
-Institutional DeFi desks hit EVM block gas
-limits under cold-storage clearing.
+00:00:00,395 --> 00:00:03,462
+Institutional desks owe
+each other in tangled rings.
 
 2
-00:00:05,500 --> 00:00:11,500
-Multilateral debt netting & batch auctions
-quickly saturate standard EVM execution.
+00:00:03,482 --> 00:00:08,988
+Settle every debt one by one, and
+capital stays locked while gas explodes.
 
 3
-00:00:11,500 --> 00:00:17,500
-StylusClear v1.2.0 solves this in no_std
-Rust compiled for Arbitrum Stylus.
+00:00:09,283 --> 00:00:15,614
+At 44 desks, our hardened Solidity
+reference burns 16.65 million gas.
 
 4
-00:00:17,500 --> 00:00:24,500
-Zero-patch WASM 1.0 MVP: 24,518 B Brotli-q11
-(54 B below 24 KiB legacy & 96 KB ArbOS 61 caps).
+00:00:15,859 --> 00:00:21,501
+StylusClear rebuilds the clearing core
+in no_std Rust on Arbitrum Stylus.
 
 5
-00:00:24,500 --> 00:00:30,600
-Zero floating-point or post-MVP opcodes,
-verified via Binaryen wasm-opt --mvp-features.
+00:00:21,521 --> 00:00:28,875
+The same batch models at 2.92M: 82.5%
+less gas, while netting away up to 94% of
 
 6
-00:00:31,200 --> 00:00:37,500
-Scenario 1 clears a 4-desk institutional ring:
-$13,200 gross compressed to $1,050 residual.
+00:00:28,895 --> 00:00:30,559
+the cash that has to move.
 
 7
-00:00:37,500 --> 00:00:44,500
-92.05% settlement liquidity saved across 2
-multilateral cycles + 2.00 WETH @ $2,850.
+00:00:32,345 --> 00:00:33,979
+Scenario one.
 
 8
-00:00:44,500 --> 00:00:51,500
-Scaling the canonical 2-Origin BFS mesh to
-24 and 64 desks runs in under 5 milliseconds.
+00:00:33,999 --> 00:00:37,748
+Four trading desks owe $13,200 in a loop.
 
 9
-00:00:51,500 --> 00:00:58,500
-Scenario 2 triggers our fail-closed oracle
-band guard: LimitPriceViolated.
+00:00:37,919 --> 00:00:42,283
+A canonical 2-origin BFS finds
+both cycles and nets them out.
 
 10
-00:00:58,500 --> 00:01:05,500
-The entire batch rolls back atomically with
-0.00% compression and zero partial state.
+00:00:42,303 --> 00:00:47,152
+Only $1,050 still has to
+move: 92% less liquidity,
 
 11
-00:01:05,500 --> 00:01:13,500
-Scenario 4: Robinhood Chain Testnet (46630)
-clearing USDG + tokenized equity NVDAx.
+00:00:47,172 --> 00:00:52,512
+plus a 2 WETH batch-auction
+fill at one uniform price.
 
 12
-00:01:13,500 --> 00:01:22,000
-$24,000 gross obligations compressed to
-$1,400 residual — 94.17% liquidity saved.
+00:00:52,895 --> 00:00:55,676
+Now push a quote 26% outside the oracle band.
 
 13
-00:01:22,000 --> 00:01:29,500
-Adaptive floor-capped liquidation protects
-borrowers and guarantees vault solvency.
+00:00:55,696 --> 00:00:59,153
+The fail-closed guard reverts
+with LimitPriceViolated,
 
 14
-00:01:30,200 --> 00:01:37,000
-Dual-chain ready: Arbitrum Sepolia (421614)
-and Robinhood Chain Testnet (46630).
+00:00:59,173 --> 00:01:01,265
+and the entire batch rolls back.
 
 15
-00:01:37,000 --> 00:01:45,000
-Payable StylusAtomicFactory binds CREATE2
-salt to caller + admin under strict CEI.
+00:01:01,285 --> 00:01:03,429
+Nothing settles halfway.
 
 16
-00:01:45,000 --> 00:01:53,000
-Detects 0xEFF000 Stylus bytecode, activates
-via ArbWasm (0x71), and initializes atomically.
+00:01:03,812 --> 00:01:10,296
+On Robinhood Chain Testnet, the same
+engine nets USDG against tokenized NVDAx:
 
 17
-00:01:53,000 --> 00:02:01,000
-Strict ERC-20 balance-delta checks guard
-every deposit, withdraw, and fee sweep.
+00:01:10,316 --> 00:01:12,177
+$24,000 gross becomes $1,400.
 
 18
-00:02:01,000 --> 00:02:09,000
-Identical read-only reentrancy guards across
-all 37 ABI methods and 19 custom errors.
+00:01:12,197 --> 00:01:17,881
+And a dust-collateral sweep means an
+insolvent account can always be closed.
 
 19
-00:02:09,000 --> 00:02:18,000
-Keyless eth_call dual-VM parity verification
-works directly from workbench or CLI.
+00:01:21,357 --> 00:01:23,381
+Shipping is engineered too.
 
 20
-00:02:18,000 --> 00:02:26,500
-Run one-click dual-chain deploy to populate
-live receipts on Arbiscan & Robinhood Explorer.
+00:01:23,401 --> 00:01:31,266
+The engine compiles to plain
+WASM 1.0: 24,518 B after Brotli,
 
 21
-00:02:27,200 --> 00:02:35,000
-Strictly isomorphic benchmarks: 2, 9, 33, 45
-eliminated cycles on both Foundry & Rust.
+00:01:31,286 --> 00:01:36,331
+54 B under the classic 24 KiB cap with
+its header, and zero float opcodes.
 
 22
-00:02:35,000 --> 00:02:43,500
-Stress tier drops from 18.30M cold EVM gas
-to 2.26M Stylus est.: -87.7% (5.71x exec (4.69x e2e) savings).
+00:01:36,626 --> 00:01:41,238
+One atomic factory deploys, activates
+and initializes it in a single
 
 23
-00:02:43,500 --> 00:02:51,000
-Comfortably below Arbitrum's 32M single-block
-gas cap under EIP-2929 vm.cool() cold slots.
+00:01:41,258 --> 00:01:46,814
+transaction, and all 37 methods share
+Solidity-identical reentrancy guards.
 
 24
-00:02:51,000 --> 00:02:59,500
-6/6 Z3 SMT theorems PROVED_UNSAT + 100/100
-Hypothesis fuzz runs cross-checked vs Rust CLI.
+00:01:48,345 --> 00:01:50,797
+This is the real workbench in Chromium.
 
 25
-00:02:59,500 --> 00:03:06,500
-18/18 Foundry, 9/9 Cargo (0 clippy), 9/9
-Pytest, and 37-method Seam S3 gates passing.
+00:01:50,817 --> 00:01:54,803
+Each preset re-runs the clearing and
+margin math right in the browser,
 
 26
-00:03:06,500 --> 00:03:12,600
-StylusClear v1.2.0 — 5-stage verification
-in under 60 seconds via verify-judge-60s.sh.
+00:01:54,823 --> 00:01:57,331
+and the oracle guard blocks the bad quote.
+
+27
+00:01:57,552 --> 00:02:02,717
+Drag the mesh to 64 desks, and the
+BFS still answers in milliseconds.
+
+28
+00:02:03,012 --> 00:02:07,425
+On the right, the actual 5-stage judge
+gates on this machine: Rust, Foundry,
+
+29
+00:02:07,445 --> 00:02:10,335
+Z3 and the workbench seam, all green.
+
+30
+00:02:10,355 --> 00:02:15,510
+Testnet manifests stay empty
+until broadcast. No fake hashes.
+
+31
+00:02:20,345 --> 00:02:22,759
+The benchmark is deliberately honest.
+
+32
+00:02:22,779 --> 00:02:27,942
+Solidity runs on cold storage slots,
+and the Stylus model prices every host
+
+33
+00:02:27,962 --> 00:02:30,724
+call, including 20k-gas cold nonce writes.
+
+34
+00:02:30,969 --> 00:02:37,177
+Savings grow with scale: 41% on
+small batches, 82.5% at stress,
+
+35
+00:02:37,197 --> 00:02:40,812
+all under Arbitrum's 32M-gas block cap.
+
+36
+00:02:41,107 --> 00:02:46,941
+Six Z3 theorems are proved, and 100
+fuzzed batches match the compiled Rust
+
+37
+00:02:46,961 --> 00:02:48,414
+binary bit for bit.
+
+38
+00:02:48,759 --> 00:02:49,508
+StylusClear.
+
+39
+00:02:49,528 --> 00:02:51,650
+Clear more, move less.
