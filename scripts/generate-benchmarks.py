@@ -221,8 +221,8 @@ def _write_derived_outputs(data: dict) -> None:
     CHART_SVG.parent.mkdir(parents=True, exist_ok=True)
     CHART_SVG.write_text(render_svg_chart(data), encoding="utf-8", newline="\n")
     e2e_script = ROOT / "scripts" / "verify-web-e2e-chromium.py"
-    if e2e_script.exists() and any(shutil.which(c) for c in ("chromium", "chromium-browser", "google-chrome")):
-        subprocess.run([sys.executable, str(e2e_script), "--rasterize-chart-only"], check=True)
+    if e2e_script.exists() and any(shutil.which(c) for c in ("google-chrome", "chromium", "chromium-browser")):
+        subprocess.run([sys.executable, str(e2e_script), "--rasterize-chart-only"], check=False)
     refresh_sha256sums(ROOT)
 
 

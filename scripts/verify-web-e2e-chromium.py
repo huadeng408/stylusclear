@@ -25,10 +25,15 @@ ASSETS_DIR = ROOT / "docs" / "assets"
 
 
 def find_chromium() -> str | None:
-    for cand in ("chromium", "chromium-browser", "google-chrome"):
+    for cand in ("google-chrome", "chromium", "chromium-browser"):
         p = shutil.which(cand)
         if p:
-            return p
+            try:
+                res = subprocess.run([p, "--version"], capture_output=True, timeout=5, check=False)
+                if res.returncode == 0:
+                    return p
+            except OSError:
+                continue
     return None
 
 
