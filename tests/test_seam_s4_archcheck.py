@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from tools.archcheck.check import check_repo
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,10 +104,36 @@ def test_s4_negative_mutations_caught(tmp_path: Path) -> None:
     assert any("1.100.0" in e for e in check_repo(tmp_path, strict=True))
     shutil.copy2(ROOT / "rust-toolchain.toml", tmp_path / "rust-toolchain.toml")
 
-    # Negative 4: pages.yml missing web/app.mjs
+    # Negative 4: pages.yml missing web/app.mjs or same-repo push workflow_run CI gate
     (tmp_path / ".github/workflows/pages.yml").write_text("steps:\n  - run: cp web/index.html _site/\n", encoding="utf-8")
-    assert any("web/app.mjs" in e for e in check_repo(tmp_path, strict=True))
+    pg_errs = check_repo(tmp_path, strict=True)
+    assert any("web/app.mjs" in e for e in pg_errs)
+    assert any("workflow_run" in e for e in pg_errs)
+    orig_pages = (ROOT / ".github/workflows/pages.yml").read_text(encoding="utf-8")
+    (tmp_path / ".github/workflows/pages.yml").write_text(
+        orig_pages.replace("workflow_run.event == 'push'", "workflow_run.event == 'pull_request'"),
+        encoding="utf-8",
+        newline="\n",
+    )
+    assert any("same-repo push workflow_run" in e for e in check_repo(tmp_path, strict=True))
     shutil.copy2(ROOT / ".github/workflows/pages.yml", tmp_path / ".github/workflows/pages.yml")
+
+    # Negative 4b: ci.yml missing concurrency, timeout-minutes, rust-cache, or REQUIRE_CHROMIUM
+    orig_ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    (tmp_path / ".github/workflows/ci.yml").write_text(
+        orig_ci.replace("REQUIRE_CHROMIUM", "SKIP_CHROMIUM")
+        .replace("concurrency:", "# no-concurrency")
+        .replace("timeout-minutes:", "# no-timeout")
+        .replace("Swatinem/rust-cache@v2", "# no-rust-cache"),
+        encoding="utf-8",
+        newline="\n",
+    )
+    ci_errs = check_repo(tmp_path, strict=True)
+    assert any("REQUIRE_CHROMIUM" in e for e in ci_errs)
+    assert any("concurrency:" in e for e in ci_errs)
+    assert any("timeout-minutes:" in e for e in ci_errs)
+    assert any("Swatinem/rust-cache@v2" in e for e in ci_errs)
+    shutil.copy2(ROOT / ".github/workflows/ci.yml", tmp_path / ".github/workflows/ci.yml")
 
     # Negative 5: deploy script asset key drift, missing atomicFactoryContract, ETH_PRIVATE_KEY & activationGas removal
     orig_sep = (ROOT / "scripts/deploy-sepolia.sh").read_text(encoding="utf-8")
@@ -144,3 +172,42 @@ def test_s4_render_from_json_keeps_sha256sums_strict_valid(tmp_path: Path) -> No
 
     subprocess.run([sys.executable, str(tmp_path / "scripts/generate-benchmarks.py"), "--render-from-json"], check=True)
     assert check_repo(tmp_path, strict=True) == []
+
+
+def test_s4_find_chromium_respects_env_and_isolates_windows_edge(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("verify_web_e2e_chromium", ROOT / "scripts" / "verify-web-e2e-chromium.py")
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    fake_edge = tmp_path / "msedge.exe"
+    fake_edge.write_bytes(b"MZ")
+
+    # 1) Explicit CHROMIUM_BIN environment override takes precedence
+    monkeypatch.setenv("CHROMIUM_BIN", str(fake_edge))
+    assert mod.find_chromium() == str(fake_edge)
+
+    # 2) On Windows, find_chromium never probes chrome/google-chrome (protects logged-in user Chrome)
+    monkeypatch.delenv("CHROMIUM_BIN", raising=False)
+    probed: list[str] = []
+
+    def _fake_which(cmd: str) -> str | None:
+        probed.append(cmd)
+        if cmd == "msedge":
+            return str(fake_edge)
+        return None
+
+    monkeypatch.setattr(mod.shutil, "which", _fake_which)
+    found = mod.find_chromium(_is_windows=True)
+    assert found == str(fake_edge)
+    assert all("chrome" not in c.lower() for c in probed)
+
+    # 3) ProgramFiles fallback when msedge is not on PATH
+    prog_edge = tmp_path / "pf" / "Microsoft" / "Edge" / "Application" / "msedge.exe"
+    prog_edge.parent.mkdir(parents=True, exist_ok=True)
+    prog_edge.write_bytes(b"MZ")
+    monkeypatch.setattr(mod.shutil, "which", lambda _cmd: None)
+    monkeypatch.setenv("ProgramFiles(x86)", str(tmp_path / "pf"))
+    assert mod.find_chromium(_is_windows=True) == str(prog_edge)

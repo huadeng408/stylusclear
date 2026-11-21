@@ -8,33 +8,91 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Binaryen version_133, pip wheels & npm packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/binaryen-v133
+            ~/.cache/pip
+            ~/.npm
+          key: ${{ runner.os }}-ci-deps-v1-${{ hashFiles('pyproject.toml', 'web/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-ci-deps-v1-
       - name: Install Binaryen version_133 (SHA-256 verified) & Python QA packages
         run: |
           set -euo pipefail
           sudo apt-get update && sudo apt-get install -y --no-install-recommends curl ca-certificates shellcheck
-          curl -fsSL https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-x86_64-linux.tar.gz -o /tmp/binaryen.tar.gz
-          echo "2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489  /tmp/binaryen.tar.gz" | sha256sum -c -
-          sudo tar -xzf /tmp/binaryen.tar.gz -C /usr/local --strip-components=1
-          rm -f /tmp/binaryen.tar.gz
+          mkdir -p "$HOME/.cache/binaryen-v133"
+          BIN_TAR="$HOME/.cache/binaryen-v133/binaryen-version_133-x86_64-linux.tar.gz"
+          if [[ ! -f "$BIN_TAR" ]] || ! echo "2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489  $BIN_TAR" | sha256sum -c -; then
+            curl -fsSL https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-x86_64-linux.tar.gz -o "$BIN_TAR"
+          fi
+          echo "2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489  $BIN_TAR" | sha256sum -c -
+          sudo tar -xzf "$BIN_TAR" -C /usr/local --strip-components=1
           wasm-opt --version
           python3 -m pip install --upgrade --break-system-packages pytest hypothesis z3-solver brotli eth-account eth-abi ruff mypy
       - uses: dtolnay/rust-toolchain@1.100.0
         with:
           targets: wasm32-unknown-unknown
           components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
       - uses: foundry-rs/foundry-toolchain@v1
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
       - name: Install Web Dev Dependencies
         working-directory: web
-        run: npm install --no-audit --no-fund
+        run: npm install --prefer-offline --no-audit --no-fund
       - name: Run Full 7-Gate Strict Check
         env:
           NODE_PATH: ${{ github.workspace }}/web/node_modules
+          REQUIRE_CHROMIUM: "1"
         run: bash scripts/check.sh --strict
+      - name: Run Hermetic Dual-Chain Anvil Deploy & Live Settlement E2E
+        run: |
+          set -euo pipefail
+          TMP_WORK="$(mktemp -d)"
+          ANVIL_SEP_PID=""
+          ANVIL_ROB_PID=""
+          trap '[[ -n "$ANVIL_SEP_PID" ]] && kill "$ANVIL_SEP_PID" >/dev/null 2>&1 || true; [[ -n "$ANVIL_ROB_PID" ]] && kill "$ANVIL_ROB_PID" >/dev/null 2>&1 || true; rm -rf "$TMP_WORK"' EXIT
+          tar --exclude="./target" --exclude="./.git" --exclude="./web/node_modules" --exclude="./node_modules" -cf - . | tar -xf - -C "$TMP_WORK"
+          read -r PORT_SEP PORT_ROB < <(python3 -c 'import socket; s1,s2=socket.socket(),socket.socket(); s1.bind(("127.0.0.1",0)); s2.bind(("127.0.0.1",0)); print(s1.getsockname()[1], s2.getsockname()[1]); s1.close(); s2.close()')
+          RPC_SEP="http://127.0.0.1:$PORT_SEP"
+          RPC_ROB="http://127.0.0.1:$PORT_ROB"
+          anvil --host 127.0.0.1 --port "$PORT_SEP" --chain-id 421614 --silent &
+          ANVIL_SEP_PID=$!
+          anvil --host 127.0.0.1 --port "$PORT_ROB" --chain-id 46630 --silent &
+          ANVIL_ROB_PID=$!
+          for _ in $(seq 1 40); do
+            [[ "$(cast chain-id --rpc-url "$RPC_SEP" 2>/dev/null || echo 0)" == "421614" ]] && [[ "$(cast chain-id --rpc-url "$RPC_ROB" 2>/dev/null || echo 0)" == "46630" ]] && break
+            sleep 0.1
+          done
+          cd "$TMP_WORK"
+          read -r DEV_PK DEV_ADDR < <(python3 -c 'import hashlib, sys; sys.path.insert(0, "."); from tools.ref_sim.crypto_eip712 import privkey_to_address; h=hashlib.sha256(b"stylusclear-ephemeral-anvil-ci").hexdigest(); print("0x"+h, privkey_to_address(int(h, 16)))')
+          cast rpc anvil_setBalance "$DEV_ADDR" 0x3635C9ADC5DEA00000 --rpc-url "$RPC_SEP" >/dev/null
+          cast rpc anvil_setBalance "$DEV_ADDR" 0x3635C9ADC5DEA00000 --rpc-url "$RPC_ROB" >/dev/null
+          if ARB_SEPOLIA_RPC_URL="$RPC_SEP" REQUIRE_STYLUS=1 PRIVATE_KEY="$DEV_PK" bash scripts/deploy-sepolia.sh >/dev/null 2>&1; then
+            echo "REQUIRE_STYLUS=1 unexpectedly succeeded without ArbWasm(0x71)" >&2
+            exit 1
+          fi
+          ARB_SEPOLIA_RPC_URL="$RPC_SEP" REQUIRE_STYLUS=0 PRIVATE_KEY="$DEV_PK" bash scripts/deploy-sepolia.sh
+          SOL_SEP="$(python3 -c 'import json; print(json.load(open("deployments/arbitrum-sepolia.json", encoding="utf-8"))["solidityBenchmarkAddress"])')"
+          ARB_SEPOLIA_RPC_URL="$RPC_SEP" REQUIRE_STYLUS=0 PRIVATE_KEY="$DEV_PK" bash scripts/deploy-sepolia.sh
+          ARB_SEPOLIA_RPC_URL="$RPC_SEP" PRIVATE_KEY="$DEV_PK" bash scripts/demo-sepolia-live.sh sepolia
+          ROBINHOOD_RPC_URL="$RPC_ROB" REQUIRE_STYLUS=0 PRIVATE_KEY="$DEV_PK" bash scripts/deploy-robinhood-testnet.sh
+          SOL_ROB="$(python3 -c 'import json; print(json.load(open("deployments/robinhood-testnet.json", encoding="utf-8"))["solidityBenchmarkAddress"])')"
+          ROBINHOOD_RPC_URL="$RPC_ROB" PRIVATE_KEY="$DEV_PK" bash scripts/demo-sepolia-live.sh robinhood
+          BAL_USDC="$(cast call "$SOL_SEP" "getAccountBalance(address,uint8)(int256)" "$DEV_ADDR" 0 --rpc-url "$RPC_SEP" | awk '{print $1}')"
+          BAL_USDG="$(cast call "$SOL_ROB" "getAccountBalance(address,uint8)(int256)" "$DEV_ADDR" 0 --rpc-url "$RPC_ROB" | awk '{print $1}')"
+          [[ "$BAL_USDC" == "24750000000000000000000" && "$BAL_USDG" == "24750000000000000000000" ]]
+          python3 tools/archcheck/check.py . --strict

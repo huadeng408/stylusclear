@@ -15,13 +15,13 @@ OUT_JSON="${OUT_JSON:-}"
 WEB_JSON="${WEB_JSON:-}"
 ACTUAL_CHAIN="${ACTUAL_CHAIN:-0}"
 RPC_URL="${RPC_URL:-}"
-CHAIN_ID_EXPECTED="${CHAIN_ID_EXPECTED:-0}"
+CHAIN_ID_EXPECTED="${CHAIN_ID_EXPECTED:-}"
 DEPLOY_OUT_NAME="${DEPLOY_OUT_NAME:-}"
 COMPILED_JSON="${COMPILED_JSON:-}"
 INITCODE_HEX_FILE="${INITCODE_HEX_FILE:-}"
 DEPLOYER_ADDR="${DEPLOYER_ADDR:-}"
-REQUIRE_STYLUS="${REQUIRE_STYLUS:-1}"
-USE_ATOMIC_FACTORY="${USE_ATOMIC_FACTORY:-1}"
+REQUIRE_STYLUS="${REQUIRE_STYLUS:-}"
+USE_ATOMIC_FACTORY="${USE_ATOMIC_FACTORY:-}"
 cleanup_ephemeral_keystore() {
   if [[ -n "${STYLUSCLEAR_TMP_KS:-}" && -d "$STYLUSCLEAR_TMP_KS" ]]; then
     rm -rf "$STYLUSCLEAR_TMP_KS"
@@ -190,12 +190,20 @@ deploy_or_stage_stylus_engine() {
   initcode="$(tr -d '[:space:]' < "$INITCODE_HEX_FILE")"
   arb_wasm_code="$(cast code 0x0000000000000000000000000000000000000071 --rpc-url "$RPC_URL")"
   if [[ "$arb_wasm_code" == "0x" ]]; then
-    act_gas_raw="18446744073709551615"
-    act_gas_exceeds="1"
-  else
-    act_gas_raw="$(cast call 0x0000000000000000000000000000000000000071 "activationGas()(uint64)" --rpc-url "$RPC_URL" | awk '{print $1}')"
-    act_gas_exceeds="$(python3 -c 'import sys; s=sys.argv[1].strip(); assert s, "empty activationGas"; print("1" if int(s, 0) >= 32_000_000 else "0")' "$act_gas_raw")"
+    if [[ "$require_stylus" == "1" ]]; then
+      echo "[deploy] ERROR: REQUIRE_STYLUS=1 but ArbWasm(0x71) precompile is absent on target RPC." >&2
+      exit 1
+    fi
+    echo "[deploy] NOTICE: ArbWasm(0x71) absent (non-Nitro EVM chain) and REQUIRE_STYLUS=0; skipping 0xEFF00000 WASM staging." >&2
+    write_checkpoint "stylusEngineAddress" "__NULL__"
+    write_checkpoint "stylusWasmBytecodeAddress" "__NULL__"
+    write_checkpoint "stylusActivationStatus" "non_nitro_evm_skipped"
+    printf '%s\n' ""
+    return 0
   fi
+
+  act_gas_raw="$(cast call 0x0000000000000000000000000000000000000071 "activationGas()(uint64)" --rpc-url "$RPC_URL" | awk '{print $1}')"
+  act_gas_exceeds="$(python3 -c 'import sys; s=sys.argv[1].strip(); assert s, "empty activationGas"; print("1" if int(s, 0) >= 32_000_000 else "0")' "$act_gas_raw")"
 
   if [[ "$act_gas_exceeds" == "1" ]]; then
     echo "[deploy] NOTICE: ArbWasm(0x71).activationGas()=$act_gas_raw (>=32M block cap; Arbitrum Security Council WASM activation pause active)." >&2

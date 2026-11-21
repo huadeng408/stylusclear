@@ -185,18 +185,41 @@ def check_repo(root: Path, strict: bool = False) -> list[str]:
                 if " " in m.group(1):
                     errors.append(f"{md_target.relative_to(root)}: broken Markdown URL with unescaped spaces: {m.group(1)[:60]}")
 
-    # 5e) CI workflow must install ruff, mypy, Rust 1.100.0 & SHA-256 verified Binaryen version_133; Pages must stage web/app.mjs
+    # 5e) CI workflow pins, caching, concurrency/timeout & REQUIRE_CHROMIUM; Pages gated on CI success + stages web/app.mjs
     ci_yml = root / ".github" / "workflows" / "ci.yml"
     if ci_yml.exists():
         cit = ci_yml.read_text(encoding="utf-8")
-        for req_pkg in ("ruff", "mypy", "1.100.0", "version_133", "sha256sum -c"):
+        for req_pkg in (
+            "ruff",
+            "mypy",
+            "1.100.0",
+            "version_133",
+            "sha256sum -c",
+            "concurrency:",
+            "cancel-in-progress: true",
+            "timeout-minutes:",
+            "Swatinem/rust-cache@v2",
+        ):
             if req_pkg not in cit:
-                errors.append(f".github/workflows/ci.yml missing required QA/reproducibility pin '{req_pkg}'")
+                errors.append(f".github/workflows/ci.yml missing required QA/CI guard '{req_pkg}'")
+        if not re.search(r'REQUIRE_CHROMIUM:\s*["\']?1["\']?', cit):
+            errors.append(".github/workflows/ci.yml must enforce REQUIRE_CHROMIUM=1 so headless E2E never silently skips")
     pages_yml = root / ".github" / "workflows" / "pages.yml"
     if pages_yml.exists():
         ptxt = pages_yml.read_text(encoding="utf-8")
         if "web/app.mjs" not in ptxt:
             errors.append(".github/workflows/pages.yml must stage web/app.mjs alongside web/index.html")
+        if (
+            "workflow_run:" not in ptxt
+            or "StylusClear CI" not in ptxt
+            or "workflow_run.conclusion == 'success'" not in ptxt
+            or "workflow_run.event == 'push'" not in ptxt
+            or "workflow_run.head_repository.full_name == github.repository" not in ptxt
+            or "workflow_run.head_sha" not in ptxt
+        ):
+            errors.append(
+                ".github/workflows/pages.yml must gate deployment behind same-repo push workflow_run of StylusClear CI success"
+            )
 
     # 5g) Deployment script checkpoint keys, ArbWasm activationGas pause guard & zero-CLI-leak keystore auth
     sep_manifest = json.loads((root / "deployments" / "arbitrum-sepolia.json").read_text(encoding="utf-8"))

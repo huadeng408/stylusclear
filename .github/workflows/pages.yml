@@ -1,7 +1,9 @@
 name: Deploy StylusClear Workbench to GitHub Pages
 
 on:
-  push:
+  workflow_run:
+    workflows: ["StylusClear CI"]
+    types: [completed]
     branches: ["main"]
   workflow_dispatch:
 
@@ -16,9 +18,19 @@ concurrency:
 
 jobs:
   build:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      )
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Stage static workbench files
         run: |
           mkdir -p _site/dist _site/deployments
@@ -33,6 +45,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

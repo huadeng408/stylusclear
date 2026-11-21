@@ -12,6 +12,7 @@ import shutil
 import socket
 import struct
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -24,8 +25,26 @@ WEB_DIR = ROOT / "web"
 ASSETS_DIR = ROOT / "docs" / "assets"
 
 
-def find_chromium() -> str | None:
-    for cand in ("google-chrome", "chromium", "chromium-browser"):
+def find_chromium(_is_windows: bool | None = None) -> str | None:
+    env_bin = os.environ.get("CHROMIUM_BIN", "").strip()
+    if env_bin and Path(env_bin).is_file():
+        return env_bin
+
+    is_win = (os.name == "nt") if _is_windows is None else _is_windows
+    if is_win:
+        # On Windows, strictly use isolated headless Microsoft Edge (never attach to or launch user Chrome profiles).
+        p = shutil.which("msedge")
+        if p and Path(p).is_file():
+            return p
+        for prog_env in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"):
+            base_dir = os.environ.get(prog_env)
+            if base_dir:
+                edge_p = Path(base_dir) / "Microsoft" / "Edge" / "Application" / "msedge.exe"
+                if edge_p.is_file():
+                    return str(edge_p)
+        return None
+
+    for cand in ("google-chrome", "chromium", "chromium-browser", "microsoft-edge"):
         p = shutil.which(cand)
         if p:
             try:
@@ -48,15 +67,24 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
         return
 
 
+class _QuietServer(http.server.ThreadingHTTPServer):
+    allow_reuse_address = True
+
+    def handle_error(self, request: object, client_address: object) -> None:
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+            return
+        super().handle_error(request, client_address)  # type: ignore[arg-type]
+
+
 def _start_server(directory: Path) -> tuple[http.server.ThreadingHTTPServer, int, str]:
     handler = functools.partial(_QuietHandler, directory=str(directory))
-    http.server.ThreadingHTTPServer.allow_reuse_address = True
     bind_host = "127.0.0.2"
     try:
-        httpd = http.server.ThreadingHTTPServer((bind_host, 0), handler)
+        httpd = _QuietServer((bind_host, 0), handler)
     except OSError:
         bind_host = "127.0.0.1"
-        httpd = http.server.ThreadingHTTPServer((bind_host, 0), handler)
+        httpd = _QuietServer((bind_host, 0), handler)
     port = httpd.server_address[1]
     t = threading.Thread(target=httpd.serve_forever, daemon=True)
     t.start()
@@ -166,6 +194,10 @@ def _launch_cdp(chromium: str, tmp_prof: str) -> tuple[subprocess.Popen, _CdpCli
             "--disable-dev-shm-usage",
             "--disable-extensions",
             "--disable-background-networking",
+            "--disable-crash-reporter",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--no-proxy-server",
             f"--user-data-dir={tmp_prof}",
             f"--remote-debugging-port={dbg_port}",
             "about:blank",
@@ -188,11 +220,35 @@ def _launch_cdp(chromium: str, tmp_prof: str) -> tuple[subprocess.Popen, _CdpCli
             time.sleep(0.12)
     if not ws_url:
         proc.kill()
+        proc.wait()
         raise RuntimeError("Chromium CDP endpoint did not start")
-    cdp = _CdpClient(ws_url)
-    cdp.call("Page.enable")
-    cdp.call("Runtime.enable")
+    try:
+        cdp = _CdpClient(ws_url)
+        cdp.call("Page.enable")
+        cdp.call("Runtime.enable")
+    except Exception:
+        proc.kill()
+        proc.wait()
+        raise
     return proc, cdp
+
+
+def _shutdown_cdp(proc: subprocess.Popen, cdp: _CdpClient) -> None:
+    try:
+        cdp.sock.settimeout(2.0)
+        cdp.call("Browser.close")
+    except Exception:
+        pass
+    try:
+        cdp.close()
+    except OSError:
+        pass
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
 
 
 def _check_viewport(
@@ -326,22 +382,17 @@ def main() -> int:
         return 0
 
     if args.rasterize_chart_only:
-        with tempfile.TemporaryDirectory(prefix="sc_cdp_") as tmp_dir:
+        with tempfile.TemporaryDirectory(prefix="sc_cdp_", ignore_cleanup_errors=True) as tmp_dir:
             proc, cdp = _launch_cdp(chromium, tmp_dir)
             try:
                 _rasterize_svg_chart(cdp, Path(tmp_dir))
             finally:
-                cdp.close()
-                proc.terminate()
-                try:
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
+                _shutdown_cdp(proc, cdp)
         _refresh_sha256sums()
         return 0
 
     httpd, port, bind_host = _start_server(WEB_DIR)
-    with tempfile.TemporaryDirectory(prefix="sc_cdp_") as tmp_dir:
+    with tempfile.TemporaryDirectory(prefix="sc_cdp_", ignore_cleanup_errors=True) as tmp_dir:
         proc, cdp = _launch_cdp(chromium, tmp_dir)
         try:
             base = f"http://{bind_host}:{port}/index.html"
@@ -366,12 +417,7 @@ def main() -> int:
             if args.capture_assets:
                 _rasterize_svg_chart(cdp, Path(tmp_dir))
         finally:
-            cdp.close()
-            proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
+            _shutdown_cdp(proc, cdp)
             httpd.shutdown()
             httpd.server_close()
 
